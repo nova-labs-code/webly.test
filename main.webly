@@ -1,0 +1,24 @@
+button.create("colorButton")
+
+colorButton.text = "FLASH"
+colorButton.width = 200
+colorButton.height = 60
+colorButton.radius = 12
+colorButton.fontSize = 20
+colorButton.background = "#222233"
+colorButton.color = "white"
+
+
+function flash(button) {
+    repeat forever {
+        button.color = "red"
+        button.color = "orange"
+        button.color = "yellow"
+        button.color = "green"
+        button.color = "blue"
+        button.color = "purple"
+    }
+}
+
+
+flash(colorButton)
