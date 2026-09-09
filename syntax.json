@@ -511,7 +511,7 @@
         "wait": {
           "type": "timing",
           "timing": "wait",
-          "webly": "wait({seconds})",
+          "webly": "waity({seconds})",
           "original": "await new Promise(resolve => setTimeout(resolve, {milliseconds}));"
         },
 
