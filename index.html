@@ -3,44 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Webly</title>
-
-    <style>
-        :root {
-            --bg: #11111b;
-            --text: #ffffff;
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            background: var(--bg);
-            color: var(--text);
-            font-family: Arial, sans-serif;
-        }
-
-        #webly-root {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        button {
-            border: none;
-            cursor: pointer;
-            color: white;
-        }
-
-        input {
-            outline: none;
-        }
-    </style>
 </head>
 
 <body>
@@ -54,9 +17,9 @@ const elements = {};
 const functions = {};
 
 
-// ==============================
+// ========================================
 // VALUE PARSER
-// ==============================
+// ========================================
 
 function parseValue(value) {
     value = value.trim();
@@ -79,11 +42,12 @@ function parseValue(value) {
 }
 
 
-// ==============================
+// ========================================
 // CREATE ELEMENT
-// ==============================
+// ========================================
 
 function createElement(type, name) {
+
     let element;
 
     switch (type.toLowerCase()) {
@@ -123,13 +87,27 @@ function createElement(type, name) {
 }
 
 
-// ==============================
+// ========================================
+// GET ELEMENT
+// ========================================
+
+function getElement(name, localElements = {}) {
+
+    if (localElements[name]) {
+        return localElements[name];
+    }
+
+    return elements[name];
+}
+
+
+// ========================================
 // SET PROPERTY
-// ==============================
+// ========================================
 
-function setProperty(name, property, value) {
+function setProperty(name, property, value, localElements = {}) {
 
-    const element = elements[name];
+    const element = getElement(name, localElements);
 
     if (!element) return;
 
@@ -253,13 +231,13 @@ function setProperty(name, property, value) {
 }
 
 
-// ==============================
+// ========================================
 // COMMANDS
-// ==============================
+// ========================================
 
-function runCommand(name, command) {
+function runCommand(name, command, localElements = {}) {
 
-    const element = elements[name];
+    const element = getElement(name, localElements);
 
     if (!element) return;
 
@@ -284,9 +262,9 @@ function runCommand(name, command) {
 }
 
 
-// ==============================
+// ========================================
 // EVENTS
-// ==============================
+// ========================================
 
 function attachEvent(name, event, body) {
 
@@ -320,14 +298,16 @@ function attachEvent(name, event, body) {
     }
 
     element.addEventListener(eventName, () => {
+
         executeBlock(body);
+
     });
 }
 
 
-// ==============================
-// FUNCTION SYSTEM
-// ==============================
+// ========================================
+// FUNCTION DEFINITION
+// ========================================
 
 function defineFunction(name, parameters, body) {
 
@@ -337,6 +317,10 @@ function defineFunction(name, parameters, body) {
     };
 }
 
+
+// ========================================
+// FUNCTION CALL
+// ========================================
 
 function callFunction(name, argumentsList) {
 
@@ -352,7 +336,10 @@ function callFunction(name, argumentsList) {
         const argument = argumentsList[i];
 
         if (elements[argument]) {
-            localElements[parameter] = elements[argument];
+
+            localElements[parameter] =
+                elements[argument];
+
         }
     }
 
@@ -363,9 +350,9 @@ function callFunction(name, argumentsList) {
 }
 
 
-// ==============================
+// ========================================
 // REPEAT FOREVER
-// ==============================
+// ========================================
 
 function executeForever(body, localElements = {}) {
 
@@ -378,9 +365,9 @@ function executeForever(body, localElements = {}) {
                 localElements
             );
 
-            await new Promise(
-                resolve => setTimeout(resolve, 300)
-            );
+            await new Promise(resolve => {
+                setTimeout(resolve, 300);
+            });
         }
     }
 
@@ -388,23 +375,60 @@ function executeForever(body, localElements = {}) {
 }
 
 
-// ==============================
-// EXECUTE LINE
-// ==============================
+// ========================================
+// FIND BLOCK
+// ========================================
 
-async function executeLine(line, localElements = {}) {
+function collectBlock(lines, startIndex) {
+
+    const body = [];
+
+    let depth = 1;
+
+    let i = startIndex + 1;
+
+    while (i < lines.length && depth > 0) {
+
+        if (lines[i].endsWith("{")) {
+            depth++;
+        }
+
+        if (lines[i] === "}") {
+            depth--;
+        }
+
+        if (depth > 0) {
+            body.push(lines[i]);
+        }
+
+        i++;
+    }
+
+    return {
+        body: body.join("\n"),
+        nextIndex: i
+    };
+}
+
+
+// ========================================
+// EXECUTE LINE
+// ========================================
+
+async function executeLine(
+    line,
+    localElements = {}
+) {
 
     line = line.trim();
 
     if (!line) return;
 
-    // repeat forever
-    if (line.startsWith("repeat forever")) {
-        return;
-    }
 
+    // ====================================
+    // PROPERTY
+    // ====================================
 
-    // Property assignment
     const propertyMatch =
         line.match(
             /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/
@@ -412,36 +436,29 @@ async function executeLine(line, localElements = {}) {
 
     if (propertyMatch) {
 
-        let name = propertyMatch[1];
-        const property = propertyMatch[2];
-        const value = propertyMatch[3];
+        const name = propertyMatch[1];
 
-        if (localElements[name]) {
-            const element = localElements[name];
+        const property =
+            propertyMatch[2];
 
-            const realName =
-                element.dataset.weblyName;
+        const value =
+            propertyMatch[3];
 
-            setProperty(
-                realName,
-                property,
-                value
-            );
-
-        } else {
-
-            setProperty(
-                name,
-                property,
-                value
-            );
-        }
+        setProperty(
+            name,
+            property,
+            value,
+            localElements
+        );
 
         return;
     }
 
 
-    // Commands
+    // ====================================
+    // COMMAND
+    // ====================================
+
     const commandMatch =
         line.match(
             /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$/
@@ -449,22 +466,26 @@ async function executeLine(line, localElements = {}) {
 
     if (commandMatch) {
 
-        let name = commandMatch[1];
-        const command = commandMatch[2];
+        const name =
+            commandMatch[1];
 
-        if (localElements[name]) {
-            name =
-                localElements[name]
-                .dataset.weblyName;
-        }
+        const command =
+            commandMatch[2];
 
-        runCommand(name, command);
+        runCommand(
+            name,
+            command,
+            localElements
+        );
 
         return;
     }
 
 
-    // Function call
+    // ====================================
+    // FUNCTION CALL
+    // ====================================
+
     const callMatch =
         line.match(
             /^([A-Za-z_][A-Za-z0-9_]*)\((.*?)\)$/
@@ -472,7 +493,8 @@ async function executeLine(line, localElements = {}) {
 
     if (callMatch) {
 
-        const functionName = callMatch[1];
+        const functionName =
+            callMatch[1];
 
         const argsText =
             callMatch[2].trim();
@@ -492,9 +514,9 @@ async function executeLine(line, localElements = {}) {
 }
 
 
-// ==============================
+// ========================================
 // EXECUTE BLOCK
-// ==============================
+// ========================================
 
 async function executeBlock(
     body,
@@ -513,43 +535,32 @@ async function executeBlock(
         const line = lines[i];
 
 
-        // repeat forever block
+        // =================================
+        // REPEAT FOREVER
+        // =================================
+
         if (line === "repeat forever {") {
 
-            const block = [];
-
-            let depth = 1;
-
-            i++;
-
-            while (
-                i < lines.length &&
-                depth > 0
-            ) {
-
-                if (lines[i].endsWith("{")) {
-                    depth++;
-                }
-
-                if (lines[i] === "}") {
-                    depth--;
-                }
-
-                if (depth > 0) {
-                    block.push(lines[i]);
-                }
-
-                i++;
-            }
+            const result =
+                collectBlock(
+                    lines,
+                    i
+                );
 
             executeForever(
-                block.join("\n"),
+                result.body,
                 localElements
             );
+
+            i = result.nextIndex - 1;
 
             continue;
         }
 
+
+        // =================================
+        // NORMAL LINE
+        // =================================
 
         await executeLine(
             line,
@@ -559,9 +570,9 @@ async function executeBlock(
 }
 
 
-// ==============================
-// PARSER
-// ==============================
+// ========================================
+// PARSE WEBLY
+// ========================================
 
 function parseWebly(source) {
 
@@ -577,9 +588,9 @@ function parseWebly(source) {
         const line = lines[i];
 
 
-        // ==========================
-        // FUNCTION DEFINITION
-        // ==========================
+        // =================================
+        // FUNCTION
+        // =================================
 
         const functionMatch =
             line.match(
@@ -588,55 +599,37 @@ function parseWebly(source) {
 
         if (functionMatch) {
 
-            const name = functionMatch[1];
+            const name =
+                functionMatch[1];
 
             const parameters =
-                functionMatch[2]
-                    .trim()
+                functionMatch[2].trim()
                     ? functionMatch[2]
                         .split(",")
                         .map(x => x.trim())
                     : [];
 
-            const body = [];
-
-            let depth = 1;
-
-            i++;
-
-            while (
-                i < lines.length &&
-                depth > 0
-            ) {
-
-                if (lines[i].endsWith("{")) {
-                    depth++;
-                }
-
-                if (lines[i] === "}") {
-                    depth--;
-                }
-
-                if (depth > 0) {
-                    body.push(lines[i]);
-                }
-
-                i++;
-            }
+            const result =
+                collectBlock(
+                    lines,
+                    i
+                );
 
             defineFunction(
                 name,
                 parameters,
-                body.join("\n")
+                result.body
             );
+
+            i = result.nextIndex - 1;
 
             continue;
         }
 
 
-        // ==========================
-        // ELEMENT CREATION
-        // ==========================
+        // =================================
+        // CREATE
+        // =================================
 
         const createMatch =
             line.match(
@@ -645,8 +638,11 @@ function parseWebly(source) {
 
         if (createMatch) {
 
-            const type = createMatch[1];
-            const name = createMatch[2];
+            const type =
+                createMatch[1];
+
+            const name =
+                createMatch[2];
 
             createElement(
                 type,
@@ -657,9 +653,9 @@ function parseWebly(source) {
         }
 
 
-        // ==========================
+        // =================================
         // EVENT
-        // ==========================
+        // =================================
 
         const eventMatch =
             line.match(
@@ -668,57 +664,42 @@ function parseWebly(source) {
 
         if (eventMatch) {
 
-            const name = eventMatch[1];
-            const event = eventMatch[2];
+            const name =
+                eventMatch[1];
 
-            const body = [];
+            const event =
+                eventMatch[2];
 
-            let depth = 1;
-
-            i++;
-
-            while (
-                i < lines.length &&
-                depth > 0
-            ) {
-
-                if (lines[i].endsWith("{")) {
-                    depth++;
-                }
-
-                if (lines[i] === "}") {
-                    depth--;
-                }
-
-                if (depth > 0) {
-                    body.push(lines[i]);
-                }
-
-                i++;
-            }
+            const result =
+                collectBlock(
+                    lines,
+                    i
+                );
 
             attachEvent(
                 name,
                 event,
-                body.join("\n")
+                result.body
             );
+
+            i = result.nextIndex - 1;
 
             continue;
         }
 
 
-        // ==========================
-        // NORMAL LINE
-        // ==========================
+        // =================================
+        // NORMAL CODE
+        // =================================
 
         executeLine(line);
     }
 }
 
 
-// ==============================
-// LOAD WEBLY
-// ==============================
+// ========================================
+// LOAD WEBLY SOURCE
+// ========================================
 
 async function loadWebly() {
 
@@ -726,6 +707,12 @@ async function loadWebly() {
 
         const response =
             await fetch("main.webly");
+
+        if (!response.ok) {
+            throw new Error(
+                "Could not load main.webly"
+            );
+        }
 
         const source =
             await response.text();
