@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Webly</title>
+
+    <style>
+        :root {
+            --bg: #11111b;
+            --text: #ffffff;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            background: var(--bg);
+            color: var(--text);
+            font-family: Arial, sans-serif;
+        }
+
+        #webly-root {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        button {
+            border: none;
+            cursor: pointer;
+            color: white;
+        }
+
+        input {
+            outline: none;
+        }
+    </style>
+</head>
+
+<body>
+
+<div id="webly-root"></div>
+
+<script>
+const root = document.getElementById("webly-root");
+
+const elements = {};
+const functions = {};
+
+
+// ==============================
+// VALUE PARSER
+// ==============================
+
+function parseValue(value) {
+    value = value.trim();
+
+    if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+    ) {
+        return value.slice(1, -1);
+    }
+
+    if (value === "true") return true;
+    if (value === "false") return false;
+
+    if (!isNaN(value)) {
+        return Number(value);
+    }
+
+    return value;
+}
+
+
+// ==============================
+// CREATE ELEMENT
+// ==============================
+
+function createElement(type, name) {
+    let element;
+
+    switch (type.toLowerCase()) {
+
+        case "button":
+            element = document.createElement("button");
+            break;
+
+        case "label":
+            element = document.createElement("label");
+            break;
+
+        case "input":
+            element = document.createElement("input");
+            break;
+
+        case "text":
+            element = document.createElement("span");
+            break;
+
+        case "box":
+            element = document.createElement("div");
+            break;
+
+        default:
+            element = document.createElement(type);
+            break;
+    }
+
+    element.dataset.weblyName = name;
+
+    elements[name] = element;
+
+    root.appendChild(element);
+
+    return element;
+}
+
+
+// ==============================
+// SET PROPERTY
+// ==============================
+
+function setProperty(name, property, value) {
+
+    const element = elements[name];
+
+    if (!element) return;
+
+    value = parseValue(value);
+
+    switch (property.toLowerCase()) {
+
+        case "text":
+            element.textContent = value;
+            break;
+
+        case "color":
+            element.style.color = value;
+            break;
+
+        case "background":
+        case "backgroundcolor":
+            element.style.backgroundColor = value;
+            break;
+
+        case "width":
+            element.style.width =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "height":
+            element.style.height =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "radius":
+            element.style.borderRadius =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "fontsize":
+            element.style.fontSize =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "padding":
+            element.style.padding =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "display":
+            element.style.display = value;
+            break;
+
+        case "direction":
+            element.style.flexDirection = value;
+            break;
+
+        case "align":
+            element.style.alignItems = value;
+            break;
+
+        case "justify":
+            element.style.justifyContent = value;
+            break;
+
+        case "gap":
+            element.style.gap =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "scale":
+            element.style.transform =
+                `scale(${value})`;
+            break;
+
+        case "hidden":
+            element.style.display =
+                value ? "none" : "";
+            break;
+
+        case "position":
+            element.style.position = value;
+            break;
+
+        case "top":
+            element.style.top =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "left":
+            element.style.left =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "right":
+            element.style.right =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+
+        case "bottom":
+            element.style.bottom =
+                typeof value === "number"
+                    ? value + "px"
+                    : value;
+            break;
+    }
+}
+
+
+// ==============================
+// COMMANDS
+// ==============================
+
+function runCommand(name, command) {
+
+    const element = elements[name];
+
+    if (!element) return;
+
+    switch (command) {
+
+        case "hide":
+            element.style.display = "none";
+            break;
+
+        case "show":
+            element.style.display = "";
+            break;
+
+        case "disable":
+            element.disabled = true;
+            break;
+
+        case "enable":
+            element.disabled = false;
+            break;
+    }
+}
+
+
+// ==============================
+// EVENTS
+// ==============================
+
+function attachEvent(name, event, body) {
+
+    const element = elements[name];
+
+    if (!element) return;
+
+    let eventName;
+
+    switch (event) {
+
+        case "clicked":
+            eventName = "click";
+            break;
+
+        case "hovered":
+            eventName = "mouseenter";
+            break;
+
+        case "pressed":
+            eventName = "mousedown";
+            break;
+
+        case "released":
+            eventName = "mouseup";
+            break;
+
+        default:
+            eventName = event;
+            break;
+    }
+
+    element.addEventListener(eventName, () => {
+        executeBlock(body);
+    });
+}
+
+
+// ==============================
+// FUNCTION SYSTEM
+// ==============================
+
+function defineFunction(name, parameters, body) {
+
+    functions[name] = {
+        parameters,
+        body
+    };
+}
+
+
+function callFunction(name, argumentsList) {
+
+    const fn = functions[name];
+
+    if (!fn) return;
+
+    const localElements = {};
+
+    for (let i = 0; i < fn.parameters.length; i++) {
+
+        const parameter = fn.parameters[i];
+        const argument = argumentsList[i];
+
+        if (elements[argument]) {
+            localElements[parameter] = elements[argument];
+        }
+    }
+
+    executeBlock(
+        fn.body,
+        localElements
+    );
+}
+
+
+// ==============================
+// REPEAT FOREVER
+// ==============================
+
+function executeForever(body, localElements = {}) {
+
+    async function loop() {
+
+        while (true) {
+
+            await executeBlock(
+                body,
+                localElements
+            );
+
+            await new Promise(
+                resolve => setTimeout(resolve, 300)
+            );
+        }
+    }
+
+    loop();
+}
+
+
+// ==============================
+// EXECUTE LINE
+// ==============================
+
+async function executeLine(line, localElements = {}) {
+
+    line = line.trim();
+
+    if (!line) return;
+
+    // repeat forever
+    if (line.startsWith("repeat forever")) {
+        return;
+    }
+
+
+    // Property assignment
+    const propertyMatch =
+        line.match(
+            /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/
+        );
+
+    if (propertyMatch) {
+
+        let name = propertyMatch[1];
+        const property = propertyMatch[2];
+        const value = propertyMatch[3];
+
+        if (localElements[name]) {
+            const element = localElements[name];
+
+            const realName =
+                element.dataset.weblyName;
+
+            setProperty(
+                realName,
+                property,
+                value
+            );
+
+        } else {
+
+            setProperty(
+                name,
+                property,
+                value
+            );
+        }
+
+        return;
+    }
+
+
+    // Commands
+    const commandMatch =
+        line.match(
+            /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$/
+        );
+
+    if (commandMatch) {
+
+        let name = commandMatch[1];
+        const command = commandMatch[2];
+
+        if (localElements[name]) {
+            name =
+                localElements[name]
+                .dataset.weblyName;
+        }
+
+        runCommand(name, command);
+
+        return;
+    }
+
+
+    // Function call
+    const callMatch =
+        line.match(
+            /^([A-Za-z_][A-Za-z0-9_]*)\((.*?)\)$/
+        );
+
+    if (callMatch) {
+
+        const functionName = callMatch[1];
+
+        const argsText =
+            callMatch[2].trim();
+
+        const args =
+            argsText
+                ? argsText
+                    .split(",")
+                    .map(x => x.trim())
+                : [];
+
+        callFunction(
+            functionName,
+            args
+        );
+    }
+}
+
+
+// ==============================
+// EXECUTE BLOCK
+// ==============================
+
+async function executeBlock(
+    body,
+    localElements = {}
+) {
+
+    const lines =
+        body
+            .split("\n")
+            .map(line => line.trim())
+            .filter(line => line);
+
+
+    for (let i = 0; i < lines.length; i++) {
+
+        const line = lines[i];
+
+
+        // repeat forever block
+        if (line === "repeat forever {") {
+
+            const block = [];
+
+            let depth = 1;
+
+            i++;
+
+            while (
+                i < lines.length &&
+                depth > 0
+            ) {
+
+                if (lines[i].endsWith("{")) {
+                    depth++;
+                }
+
+                if (lines[i] === "}") {
+                    depth--;
+                }
+
+                if (depth > 0) {
+                    block.push(lines[i]);
+                }
+
+                i++;
+            }
+
+            executeForever(
+                block.join("\n"),
+                localElements
+            );
+
+            continue;
+        }
+
+
+        await executeLine(
+            line,
+            localElements
+        );
+    }
+}
+
+
+// ==============================
+// PARSER
+// ==============================
+
+function parseWebly(source) {
+
+    const lines =
+        source
+            .split("\n")
+            .map(line => line.trim())
+            .filter(line => line);
+
+
+    for (let i = 0; i < lines.length; i++) {
+
+        const line = lines[i];
+
+
+        // ==========================
+        // FUNCTION DEFINITION
+        // ==========================
+
+        const functionMatch =
+            line.match(
+                /^function\s+([A-Za-z_][A-Za-z0-9_]*)\((.*?)\)\s*\{$/
+            );
+
+        if (functionMatch) {
+
+            const name = functionMatch[1];
+
+            const parameters =
+                functionMatch[2]
+                    .trim()
+                    ? functionMatch[2]
+                        .split(",")
+                        .map(x => x.trim())
+                    : [];
+
+            const body = [];
+
+            let depth = 1;
+
+            i++;
+
+            while (
+                i < lines.length &&
+                depth > 0
+            ) {
+
+                if (lines[i].endsWith("{")) {
+                    depth++;
+                }
+
+                if (lines[i] === "}") {
+                    depth--;
+                }
+
+                if (depth > 0) {
+                    body.push(lines[i]);
+                }
+
+                i++;
+            }
+
+            defineFunction(
+                name,
+                parameters,
+                body.join("\n")
+            );
+
+            continue;
+        }
+
+
+        // ==========================
+        // ELEMENT CREATION
+        // ==========================
+
+        const createMatch =
+            line.match(
+                /^([A-Za-z_][A-Za-z0-9_]*)\.create\("([^"]+)"\)$/
+            );
+
+        if (createMatch) {
+
+            const type = createMatch[1];
+            const name = createMatch[2];
+
+            createElement(
+                type,
+                name
+            );
+
+            continue;
+        }
+
+
+        // ==========================
+        // EVENT
+        // ==========================
+
+        const eventMatch =
+            line.match(
+                /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*\{$/
+            );
+
+        if (eventMatch) {
+
+            const name = eventMatch[1];
+            const event = eventMatch[2];
+
+            const body = [];
+
+            let depth = 1;
+
+            i++;
+
+            while (
+                i < lines.length &&
+                depth > 0
+            ) {
+
+                if (lines[i].endsWith("{")) {
+                    depth++;
+                }
+
+                if (lines[i] === "}") {
+                    depth--;
+                }
+
+                if (depth > 0) {
+                    body.push(lines[i]);
+                }
+
+                i++;
+            }
+
+            attachEvent(
+                name,
+                event,
+                body.join("\n")
+            );
+
+            continue;
+        }
+
+
+        // ==========================
+        // NORMAL LINE
+        // ==========================
+
+        executeLine(line);
+    }
+}
+
+
+// ==============================
+// LOAD WEBLY
+// ==============================
+
+async function loadWebly() {
+
+    try {
+
+        const response =
+            await fetch("main.webly");
+
+        const source =
+            await response.text();
+
+        parseWebly(source);
+
+    } catch (error) {
+
+        console.error(
+            "Webly error:",
+            error
+        );
+    }
+}
+
+
+loadWebly();
+</script>
+
+</body>
+</html>
