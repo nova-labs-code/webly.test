@@ -36,27 +36,27 @@
 /*
     Webly Runtime
 
-    The runtime does not contain Webly's individual syntax definitions.
-    Those are loaded from syntax.json.
+    Webly syntax is defined by syntax.json.
 
-    syntax.json describes:
+    The runtime provides generic execution for:
         - elements
-        - properties
+        - page properties
+        - element properties
         - styles
         - events
         - actions
-        - assignments
+        - variables
         - functions
-        - controls
+        - control flow
         - timing
         - native operations
-
-    The runtime only understands the generic operation types.
 */
+
 
 class WeblyRuntime {
 
     constructor(syntax) {
+
         this.syntax = syntax;
         this.definitions = [];
 
@@ -78,9 +78,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
-       SYNTAX DEFINITION COLLECTION
-    --------------------------------------------------------- */
+    /* =========================================================
+       SYNTAX DEFINITIONS
+    ========================================================= */
 
     collectDefinitions(value, path = []) {
 
@@ -92,6 +92,7 @@ class WeblyRuntime {
             typeof value.type === "string" &&
             typeof value.webly === "string"
         ) {
+
             this.definitions.push({
                 ...value,
                 path: [...path]
@@ -101,18 +102,14 @@ class WeblyRuntime {
         for (const [key, child] of Object.entries(value)) {
 
             if (
-                key === "webly" &&
-                typeof child === "object"
-            ) {
-                this.collectDefinitions(child, [...path, key]);
-                continue;
-            }
-
-            if (
                 child &&
                 typeof child === "object"
             ) {
-                this.collectDefinitions(child, [...path, key]);
+
+                this.collectDefinitions(
+                    child,
+                    [...path, key]
+                );
             }
         }
     }
@@ -121,32 +118,48 @@ class WeblyRuntime {
     getDefinitionsByType(type) {
 
         return this.definitions.filter(
-            definition => definition.type === type
+            definition =>
+                definition.type === type
         );
     }
 
 
-    /* ---------------------------------------------------------
-       SOURCE PARSING
-    --------------------------------------------------------- */
+    isPageDefinition(definition) {
+
+        return (
+            definition &&
+            definition.target === "page"
+        );
+    }
+
+
+    /* =========================================================
+       SOURCE PARSER
+    ========================================================= */
 
     parse(source) {
 
-        const cleaned = this.cleanSource(source);
-
-        return this.parseBlock(cleaned);
+        return this.parseBlock(
+            this.cleanSource(source)
+        );
     }
 
 
     cleanSource(source) {
 
         let result = "";
+
         let quote = null;
         let escaped = false;
+
         let lineComment = false;
         let blockComment = false;
 
-        for (let i = 0; i < source.length; i++) {
+        for (
+            let i = 0;
+            i < source.length;
+            i++
+        ) {
 
             const char = source[i];
             const next = source[i + 1];
@@ -154,6 +167,7 @@ class WeblyRuntime {
             if (lineComment) {
 
                 if (char === "\n") {
+
                     lineComment = false;
                     result += "\n";
                 }
@@ -163,7 +177,11 @@ class WeblyRuntime {
 
             if (blockComment) {
 
-                if (char === "*" && next === "/") {
+                if (
+                    char === "*" &&
+                    next === "/"
+                ) {
+
                     blockComment = false;
                     i++;
                 }
@@ -176,16 +194,19 @@ class WeblyRuntime {
                 result += char;
 
                 if (escaped) {
+
                     escaped = false;
                     continue;
                 }
 
                 if (char === "\\") {
+
                     escaped = true;
                     continue;
                 }
 
                 if (char === quote) {
+
                     quote = null;
                 }
 
@@ -197,18 +218,27 @@ class WeblyRuntime {
                 char === "'" ||
                 char === "`"
             ) {
+
                 quote = char;
                 result += char;
                 continue;
             }
 
-            if (char === "/" && next === "/") {
+            if (
+                char === "/" &&
+                next === "/"
+            ) {
+
                 lineComment = true;
                 i++;
                 continue;
             }
 
-            if (char === "/" && next === "*") {
+            if (
+                char === "/" &&
+                next === "*"
+            ) {
+
                 blockComment = true;
                 i++;
                 continue;
@@ -244,6 +274,7 @@ class WeblyRuntime {
 
             let quote = null;
             let escaped = false;
+
             let parenDepth = 0;
             let bracketDepth = 0;
 
@@ -257,18 +288,21 @@ class WeblyRuntime {
                 if (quote) {
 
                     if (escaped) {
+
                         escaped = false;
                         i++;
                         continue;
                     }
 
                     if (char === "\\") {
+
                         escaped = true;
                         i++;
                         continue;
                     }
 
                     if (char === quote) {
+
                         quote = null;
                     }
 
@@ -281,30 +315,35 @@ class WeblyRuntime {
                     char === "'" ||
                     char === "`"
                 ) {
+
                     quote = char;
                     i++;
                     continue;
                 }
 
                 if (char === "(") {
+
                     parenDepth++;
                     i++;
                     continue;
                 }
 
                 if (char === ")") {
+
                     parenDepth--;
                     i++;
                     continue;
                 }
 
                 if (char === "[") {
+
                     bracketDepth++;
                     i++;
                     continue;
                 }
 
                 if (char === "]") {
+
                     bracketDepth--;
                     i++;
                     continue;
@@ -327,11 +366,13 @@ class WeblyRuntime {
                     bracketDepth === 0
                 ) {
 
-                    const statement = source
-                        .slice(start, i)
-                        .trim();
+                    const statement =
+                        source
+                            .slice(start, i)
+                            .trim();
 
                     if (statement) {
+
                         nodes.push({
                             type: "statement",
                             header: statement,
@@ -349,11 +390,13 @@ class WeblyRuntime {
                     bracketDepth === 0
                 ) {
 
-                    const statement = source
-                        .slice(start, i)
-                        .trim();
+                    const statement =
+                        source
+                            .slice(start, i)
+                            .trim();
 
                     if (statement) {
+
                         nodes.push({
                             type: "statement",
                             header: statement,
@@ -370,44 +413,51 @@ class WeblyRuntime {
 
             if (foundBrace) {
 
-                const header = source
-                    .slice(start, braceIndex)
-                    .trim();
+                const header =
+                    source
+                        .slice(start, braceIndex)
+                        .trim();
 
-                const end = this.findMatchingBrace(
-                    source,
-                    braceIndex
-                );
+                const end =
+                    this.findMatchingBrace(
+                        source,
+                        braceIndex
+                    );
 
                 if (end === -1) {
+
                     throw new Error(
                         `Unclosed block: ${header}`
                     );
                 }
 
-                const bodySource = source.slice(
-                    braceIndex + 1,
-                    end
-                );
+                const bodySource =
+                    source.slice(
+                        braceIndex + 1,
+                        end
+                    );
 
                 nodes.push({
                     type: "block",
                     header,
-                    body: this.parseBlock(bodySource)
+                    body: this.parseBlock(
+                        bodySource
+                    )
                 });
 
                 i = end + 1;
-
                 continue;
             }
 
             if (i >= source.length) {
 
-                const statement = source
-                    .slice(start)
-                    .trim();
+                const statement =
+                    source
+                        .slice(start)
+                        .trim();
 
                 if (statement) {
+
                     nodes.push({
                         type: "statement",
                         header: statement,
@@ -426,6 +476,7 @@ class WeblyRuntime {
     findMatchingBrace(source, start) {
 
         let depth = 0;
+
         let quote = null;
         let escaped = false;
 
@@ -440,16 +491,19 @@ class WeblyRuntime {
             if (quote) {
 
                 if (escaped) {
+
                     escaped = false;
                     continue;
                 }
 
                 if (char === "\\") {
+
                     escaped = true;
                     continue;
                 }
 
                 if (char === quote) {
+
                     quote = null;
                 }
 
@@ -461,11 +515,13 @@ class WeblyRuntime {
                 char === "'" ||
                 char === "`"
             ) {
+
                 quote = char;
                 continue;
             }
 
             if (char === "{") {
+
                 depth++;
                 continue;
             }
@@ -484,9 +540,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        TEMPLATE MATCHING
-    --------------------------------------------------------- */
+    ========================================================= */
 
     templateToRegex(template) {
 
@@ -497,48 +553,62 @@ class WeblyRuntime {
 
             if (
                 template[i] === "{" &&
-                template.slice(i).startsWith("{ ... }")
+                template
+                    .slice(i)
+                    .startsWith("{ ... }")
             ) {
 
                 pattern += "[\\s\\S]*";
+
                 i += "{ ... }".length;
+
                 continue;
             }
 
             if (template[i] === "{") {
 
-                const end = template.indexOf(
-                    "}",
-                    i + 1
-                );
+                const end =
+                    template.indexOf(
+                        "}",
+                        i + 1
+                    );
 
                 if (end !== -1) {
 
-                    const name = template.slice(
-                        i + 1,
-                        end
-                    ).trim();
+                    const name =
+                        template
+                            .slice(
+                                i + 1,
+                                end
+                            )
+                            .trim();
 
                     if (name) {
 
                         pattern +=
-                            this.placeholderPattern(name);
+                            this.placeholderPattern(
+                                name
+                            );
 
                         i = end + 1;
+
                         continue;
                     }
                 }
             }
 
-            pattern += this.escapeRegex(
-                template[i]
-            );
+            pattern +=
+                this.escapeRegex(
+                    template[i]
+                );
 
             i++;
         }
 
         return new RegExp(
-            "^\\s*" + pattern + "\\s*$",
+            "^\\s*" +
+            pattern +
+            "\\s*$",
             "s"
         );
     }
@@ -546,29 +616,18 @@ class WeblyRuntime {
 
     placeholderPattern(name) {
 
-        /*
-            Identifier-like placeholders are restricted so that:
-
-                {name} = {value}
-
-            correctly matches:
-
-                wait = 1
-
-            instead of allowing {name} to consume
-            the rest of the expression.
-        */
-
         if (
             name === "name" ||
             name === "element" ||
             name === "target" ||
             name === "type"
         ) {
+
             return "([A-Za-z_$][A-Za-z0-9_$]*)";
         }
 
         if (name === "condition") {
+
             return "([\\s\\S]*?)";
         }
 
@@ -579,6 +638,7 @@ class WeblyRuntime {
             name === "amount" ||
             name === "url"
         ) {
+
             return "([\\s\\S]*?)";
         }
 
@@ -601,40 +661,40 @@ class WeblyRuntime {
 
         for (const definition of this.definitions) {
 
-            let template = definition.webly;
+            let template =
+                definition.webly;
 
-            /*
-                A definition such as:
+            if (
+                template.includes(
+                    "{ ... }"
+                )
+            ) {
 
-                    function {name}() { ... }
-
-                is matched against the block header:
-
-                    function flash()
-
-                so the outer block portion is removed.
-            */
-
-            if (template.includes("{ ... }")) {
-                template = template
-                    .replace(
-                        /\s*\{\s*\.\.\.\s*\}\s*$/,
-                        ""
-                    )
-                    .trim();
+                template =
+                    template
+                        .replace(
+                            /\s*\{\s*\.\.\.\s*\}\s*$/,
+                            ""
+                        )
+                        .trim();
             }
 
             let regex;
 
             try {
-                regex = this.templateToRegex(
-                    template
-                );
+
+                regex =
+                    this.templateToRegex(
+                        template
+                    );
+
             } catch {
+
                 continue;
             }
 
-            const match = text.match(regex);
+            const match =
+                text.match(regex);
 
             if (!match) {
                 continue;
@@ -652,8 +712,10 @@ class WeblyRuntime {
                 i < placeholders.length;
                 i++
             ) {
-                values[placeholders[i]] =
-                    match[i + 1];
+
+                values[
+                    placeholders[i]
+                ] = match[i + 1];
             }
 
             candidates.push({
@@ -662,16 +724,21 @@ class WeblyRuntime {
             });
         }
 
-        /*
-            Prefer the most specific template.
+        if (!candidates.length) {
+            return null;
+        }
 
-            This is important because broad definitions such
-            as assignments should not beat a more specific
-            definition when one exists.
+        /*
+            Most-specific definition wins.
+
+            Page definitions receive a large priority bonus
+            because "page" is a special Webly target, not
+            an HTML element.
         */
 
         candidates.sort(
             (a, b) => {
+
                 const aScore =
                     this.definitionSpecificity(
                         a.definition
@@ -686,7 +753,7 @@ class WeblyRuntime {
             }
         );
 
-        return candidates[0] || null;
+        return candidates[0];
     }
 
 
@@ -694,7 +761,8 @@ class WeblyRuntime {
 
         const result = [];
 
-        const regex = /\{([^{}]+)\}/g;
+        const regex =
+            /\{([^{}]+)\}/g;
 
         let match;
 
@@ -702,7 +770,8 @@ class WeblyRuntime {
             (match = regex.exec(template)) !== null
         ) {
 
-            const name = match[1].trim();
+            const name =
+                match[1].trim();
 
             if (name === "...") {
                 continue;
@@ -719,7 +788,8 @@ class WeblyRuntime {
 
         let score = 0;
 
-        const template = definition.webly;
+        const template =
+            definition.webly;
 
         for (const char of template) {
 
@@ -727,29 +797,71 @@ class WeblyRuntime {
                 char !== "{" &&
                 char !== "}"
             ) {
+
                 score++;
             }
+        }
+
+        /*
+            Explicit page targets must beat generic
+            element definitions.
+
+            Example:
+
+                page.background = "red"
+
+            must select:
+
+                {target}.background = {value}
+
+            instead of:
+
+                {element}.background = {value}
+        */
+
+        if (
+            definition.target === "page"
+        ) {
+
+            score += 100000;
+        }
+
+        /*
+            Definitions physically under the "page"
+            section also receive priority.
+        */
+
+        if (
+            Array.isArray(definition.path) &&
+            definition.path.includes("page")
+        ) {
+
+            score += 50000;
         }
 
         return score;
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        VALUE SYSTEM
-    --------------------------------------------------------- */
+    ========================================================= */
 
-    resolveValue(value) {
+    resolveValue(
+        value,
+        localVariables = null
+    ) {
 
-        if (value === undefined || value === null) {
+        if (
+            value === undefined ||
+            value === null
+        ) {
+
             return value;
         }
 
-        let text = String(value).trim();
-
-        /*
-            Strings
-        */
+        let text =
+            String(value).trim();
 
         if (
             (
@@ -765,10 +877,6 @@ class WeblyRuntime {
             return this.unquote(text);
         }
 
-        /*
-            Booleans
-        */
-
         if (text === "true") {
             return true;
         }
@@ -777,46 +885,46 @@ class WeblyRuntime {
             return false;
         }
 
-        /*
-            Null
-        */
-
         if (text === "null") {
             return null;
         }
 
-        /*
-            Numeric values
-        */
-
         if (
-            /^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(text)
+            /^[-+]?(?:\d+\.?\d*|\.\d+)$/.test(
+                text
+            )
         ) {
+
             return Number(text);
         }
-
-        /*
-            Parenthesized expressions
-        */
 
         if (
             text.startsWith("(") &&
             text.endsWith(")")
         ) {
 
-            const inner = text.slice(
-                1,
-                -1
-            );
-
             return this.evaluateExpression(
-                inner
+                text.slice(1, -1),
+                localVariables
             );
         }
 
-        /*
-            Known variable
-        */
+        const localValue =
+            this.getVariable(
+                text,
+                localVariables
+            );
+
+        if (
+            localVariables &&
+            Object.prototype.hasOwnProperty.call(
+                localVariables,
+                text
+            )
+        ) {
+
+            return localValue;
+        }
 
         if (
             Object.prototype.hasOwnProperty.call(
@@ -824,22 +932,23 @@ class WeblyRuntime {
                 text
             )
         ) {
+
             return this.variables[text];
         }
-
-        /*
-            Expression
-        */
 
         if (
             this.looksLikeExpression(text)
         ) {
 
             try {
+
                 return this.evaluateExpression(
-                    text
+                    text,
+                    localVariables
                 );
+
             } catch {
+
                 return text;
             }
         }
@@ -854,18 +963,26 @@ class WeblyRuntime {
             return value;
         }
 
-        const quote = value[0];
+        const quote =
+            value[0];
 
         if (
-            value[value.length - 1] !== quote
+            value[value.length - 1] !==
+            quote
         ) {
+
             return value;
         }
 
         try {
+
             if (quote === '"') {
-                return JSON.parse(value);
+
+                return JSON.parse(
+                    value
+                );
             }
+
         } catch {}
 
         return value.slice(
@@ -884,7 +1001,15 @@ class WeblyRuntime {
     }
 
 
-    evaluateExpression(expression) {
+    evaluateExpression(
+        expression,
+        localVariables = null
+    ) {
+
+        const scope = {
+            ...this.variables,
+            ...(localVariables || {})
+        };
 
         const transformed =
             this.transformExpression(
@@ -892,10 +1017,10 @@ class WeblyRuntime {
             );
 
         return Function(
-            ...Object.keys(this.variables),
+            ...Object.keys(scope),
             `"use strict"; return (${transformed});`
         )(
-            ...Object.values(this.variables)
+            ...Object.values(scope)
         );
     }
 
@@ -918,9 +1043,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        VARIABLES
-    --------------------------------------------------------- */
+    ========================================================= */
 
     setVariable(
         name,
@@ -929,11 +1054,15 @@ class WeblyRuntime {
     ) {
 
         if (localVariables) {
-            localVariables[name] = value;
+
+            localVariables[name] =
+                value;
+
             return;
         }
 
-        this.variables[name] = value;
+        this.variables[name] =
+            value;
     }
 
 
@@ -949,6 +1078,7 @@ class WeblyRuntime {
                 name
             )
         ) {
+
             return localVariables[name];
         }
 
@@ -956,9 +1086,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        ASSIGNMENTS
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeAssignment(
         definition,
@@ -966,12 +1096,13 @@ class WeblyRuntime {
         localVariables
     ) {
 
-        const name = values.name;
-        const rawValue = values.value;
+        const name =
+            values.name;
 
         const value =
             this.resolveValue(
-                rawValue
+                values.value,
+                localVariables
             );
 
         const operator =
@@ -988,26 +1119,41 @@ class WeblyRuntime {
         switch (operator) {
 
             case "=":
+
                 result = value;
+
                 break;
 
             case "+=":
-                result = current + value;
+
+                result =
+                    current + value;
+
                 break;
 
             case "-=":
-                result = current - value;
+
+                result =
+                    current - value;
+
                 break;
 
             case "*=":
-                result = current * value;
+
+                result =
+                    current * value;
+
                 break;
 
             case "/=":
-                result = current / value;
+
+                result =
+                    current / value;
+
                 break;
 
             default:
+
                 throw new Error(
                     `Unsupported assignment operator: ${operator}`
                 );
@@ -1023,16 +1169,32 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        DOM ELEMENTS
-    --------------------------------------------------------- */
+    ========================================================= */
 
     getElement(name) {
 
+        /*
+            "page" is NOT an element.
+
+            This function is only for actual HTML elements.
+        */
+
+        if (name === "page") {
+
+            throw new Error(
+                "The 'page' target is not an HTML element."
+            );
+        }
+
         const element =
-            document.getElementById(name);
+            document.getElementById(
+                name
+            );
 
         if (!element) {
+
             throw new Error(
                 `Element not found: ${name}`
             );
@@ -1056,19 +1218,23 @@ class WeblyRuntime {
             );
 
         if (!tag) {
+
             throw new Error(
                 "Element definition has no tag."
             );
         }
 
         if (!name) {
+
             throw new Error(
                 "Element definition has no name."
             );
         }
 
         let element =
-            document.getElementById(name);
+            document.getElementById(
+                name
+            );
 
         if (!element) {
 
@@ -1077,7 +1243,8 @@ class WeblyRuntime {
                     tag
                 );
 
-            element.id = name;
+            element.id =
+                name;
 
             document.body.appendChild(
                 element
@@ -1090,16 +1257,17 @@ class WeblyRuntime {
 
     resolveElementName(value) {
 
-        const resolved =
-            this.resolveValue(value);
-
-        return String(resolved);
+        return String(
+            this.resolveValue(
+                value
+            )
+        );
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        PROPERTIES
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeProperty(
         definition,
@@ -1107,21 +1275,77 @@ class WeblyRuntime {
     ) {
 
         /*
-            The native expression stored in syntax.json
-            is the source of truth.
+            Page properties operate directly on the
+            webpage and use their JSON native mapping.
 
-            This allows a property to map to any native
-            operation without adding that Webly property
-            to this runtime.
+            Example:
+
+                page.background = "red"
+
+            becomes:
+
+                document.body.style.background = "red";
         */
+
+        if (
+            this.isPageDefinition(
+                definition
+            )
+        ) {
+
+            const native =
+                this.buildNative(
+                    definition.original,
+                    values
+                );
+
+            if (!native) {
+
+                throw new Error(
+                    "Page property has no native mapping."
+                );
+            }
+
+            await this.executeJavaScript(
+                native
+            );
+
+            return;
+        }
+
+        /*
+            Normal element properties use their
+            JSON-defined native mapping.
+        */
+
+        const elementName =
+            this.resolveElementName(
+                values.element
+            );
+
+        const element =
+            this.getElement(
+                elementName
+            );
+
+        if (!element) {
+
+            throw new Error(
+                `Element not found: ${elementName}`
+            );
+        }
 
         const native =
             this.buildNative(
                 definition.original,
-                values
+                {
+                    ...values,
+                    element: elementName
+                }
             );
 
         if (!native) {
+
             throw new Error(
                 "Property has no native mapping."
             );
@@ -1133,26 +1357,34 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        STYLES
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeStyle(
         definition,
-        values
+        values,
+        localVariables
     ) {
+
+        const elementName =
+            this.resolveElementName(
+                this.resolveValue(
+                    values.element,
+                    localVariables
+                )
+            );
 
         const element =
             this.getElement(
-                this.resolveElementName(
-                    values.element
-                )
+                elementName
             );
 
         const property =
             definition.property;
 
         if (!property) {
+
             throw new Error(
                 "Style definition has no property."
             );
@@ -1160,45 +1392,45 @@ class WeblyRuntime {
 
         let value =
             this.resolveValue(
-                values.value
+                values.value,
+                localVariables
             );
 
         /*
-            Special hidden mapping.
+            Hidden style.
         */
 
         if (
-            definition.hiddenValue !== undefined &&
-            definition.visibleValue !== undefined
+            definition.hiddenValue !==
+                undefined &&
+            definition.visibleValue !==
+                undefined
         ) {
 
             const truthy =
                 value === true ||
                 value === "true";
 
-            value = truthy
-                ? definition.hiddenValue
-                : definition.visibleValue;
+            value =
+                truthy
+                    ? definition.hiddenValue
+                    : definition.visibleValue;
         }
 
         /*
-            Transform properties need to be constructed
-            from their metadata.
+            Transform.
         */
 
         if (definition.transform) {
 
-            const transform =
-                definition.transform;
-
             element.style[property] =
-                `${transform}(${value})`;
+                `${definition.transform}(${value})`;
 
             return;
         }
 
         /*
-            Unit-bearing properties.
+            Unit.
         */
 
         if (
@@ -1215,29 +1447,34 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        ACTIONS
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeAction(
         definition,
-        values
+        values,
+        localVariables
     ) {
+
+        const elementName =
+            this.resolveElementName(
+                this.resolveValue(
+                    values.element,
+                    localVariables
+                )
+            );
 
         const element =
             this.getElement(
-                this.resolveElementName(
-                    values.element
-                )
+                elementName
             );
 
         const action =
             definition.action;
 
-        const value =
-            definition.value;
-
         if (!action) {
+
             throw new Error(
                 "Action definition has no action."
             );
@@ -1252,14 +1489,19 @@ class WeblyRuntime {
                 element[action];
 
             if (
-                typeof method !== "function"
+                typeof method !==
+                "function"
             ) {
+
                 throw new Error(
                     `Element does not support ${action}().`
                 );
             }
 
-            method.call(element);
+            method.call(
+                element
+            );
+
             return;
         }
 
@@ -1267,7 +1509,8 @@ class WeblyRuntime {
             element,
             action,
             this.resolveValue(
-                value
+                definition.value,
+                localVariables
             )
         );
     }
@@ -1292,9 +1535,12 @@ class WeblyRuntime {
         ) {
 
             if (
-                target[parts[i]] === undefined ||
-                target[parts[i]] === null
+                target[parts[i]] ===
+                    undefined ||
+                target[parts[i]] ===
+                    null
             ) {
+
                 target[parts[i]] = {};
             }
 
@@ -1308,9 +1554,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        EVENTS
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async registerEvent(
         definition,
@@ -1329,6 +1575,7 @@ class WeblyRuntime {
             definition.event;
 
         if (!event) {
+
             throw new Error(
                 "Event definition has no event."
             );
@@ -1356,9 +1603,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        FUNCTIONS
-    --------------------------------------------------------- */
+    ========================================================= */
 
     registerFunction(
         values,
@@ -1387,6 +1634,7 @@ class WeblyRuntime {
             this.functions[name];
 
         if (!fn) {
+
             throw new Error(
                 `Webly function not found: ${name}`
             );
@@ -1396,6 +1644,7 @@ class WeblyRuntime {
             this.callDepth >=
             this.maxCallDepth
         ) {
+
             throw new Error(
                 `Maximum function call depth exceeded: ${name}`
             );
@@ -1417,9 +1666,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        CONDITIONS
-    --------------------------------------------------------- */
+    ========================================================= */
 
     evaluateCondition(
         condition,
@@ -1427,12 +1676,8 @@ class WeblyRuntime {
     ) {
 
         const text =
-            String(condition).trim();
-
-        /*
-            Build a variable scope that contains locals first,
-            then globals.
-        */
+            String(condition)
+                .trim();
 
         const scope = {
             ...this.variables,
@@ -1459,7 +1704,8 @@ class WeblyRuntime {
 
             const value =
                 this.resolveValue(
-                    text
+                    text,
+                    localVariables
                 );
 
             return Boolean(value);
@@ -1467,9 +1713,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        CONTROL FLOW
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeControl(
         definition,
@@ -1485,11 +1731,13 @@ class WeblyRuntime {
 
             return {
                 type: "branch",
+
                 matched:
                     this.evaluateCondition(
                         values.condition,
                         localVariables
                     ),
+
                 body
             };
         }
@@ -1498,11 +1746,13 @@ class WeblyRuntime {
 
             return {
                 type: "branch",
+
                 matched:
                     this.evaluateCondition(
                         values.condition,
                         localVariables
                     ),
+
                 body
             };
         }
@@ -1511,7 +1761,9 @@ class WeblyRuntime {
 
             return {
                 type: "branch",
+
                 matched: true,
+
                 body
             };
         }
@@ -1533,6 +1785,7 @@ class WeblyRuntime {
                     iterations >
                     this.maxLoopIterations
                 ) {
+
                     throw new Error(
                         "Maximum loop iterations exceeded."
                     );
@@ -1554,13 +1807,15 @@ class WeblyRuntime {
             const amount =
                 Number(
                     this.resolveValue(
-                        values.amount
+                        values.amount,
+                        localVariables
                     )
                 );
 
             if (
                 !Number.isFinite(amount)
             ) {
+
                 throw new Error(
                     `Invalid repeat amount: ${values.amount}`
                 );
@@ -1601,11 +1856,6 @@ class WeblyRuntime {
                     iterations >
                     this.maxLoopIterations
                 ) {
-                    /*
-                        A forever loop should normally contain
-                        a wait. This safety limit prevents a
-                        malformed program from locking the page.
-                    */
 
                     throw new Error(
                         "Forever loop exceeded the runtime safety limit. Add a wait inside the loop."
@@ -1629,9 +1879,9 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        TIMING
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeTiming(
         definition,
@@ -1648,13 +1898,15 @@ class WeblyRuntime {
             const seconds =
                 Number(
                     this.resolveValue(
-                        values.seconds
+                        values.seconds,
+                        localVariables
                     )
                 );
 
             if (
                 !Number.isFinite(seconds)
             ) {
+
                 throw new Error(
                     `Invalid wait value: ${values.seconds}`
                 );
@@ -1675,13 +1927,15 @@ class WeblyRuntime {
             const seconds =
                 Number(
                     this.resolveValue(
-                        values.seconds
+                        values.seconds,
+                        localVariables
                     )
                 );
 
             if (
                 !Number.isFinite(seconds)
             ) {
+
                 throw new Error(
                     `Invalid timeout value: ${values.seconds}`
                 );
@@ -1710,6 +1964,7 @@ class WeblyRuntime {
                         );
                     }
                 },
+
                 Math.max(
                     0,
                     seconds * 1000
@@ -1749,22 +2004,25 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        NATIVE JAVASCRIPT
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeNative(
         definition,
-        values
+        values,
+        localVariables
     ) {
 
         const native =
             this.buildNative(
                 definition.original,
-                values
+                values,
+                localVariables
             );
 
         if (!native) {
+
             throw new Error(
                 "Native definition has no original mapping."
             );
@@ -1778,42 +2036,60 @@ class WeblyRuntime {
 
     buildNative(
         template,
-        values
+        values,
+        localVariables = null
     ) {
 
         if (
             typeof template !== "string"
         ) {
+
             return "";
         }
 
-        let result = template;
+        let result =
+            template;
 
         const placeholders =
             this.extractPlaceholders(
                 template
             );
 
-        /*
-            Replace longest names first.
-        */
-
         const unique =
-            [...new Set(placeholders)]
-                .sort(
-                    (a, b) =>
-                        b.length - a.length
-                );
+            [
+                ...new Set(
+                    placeholders
+                )
+            ].sort(
+                (a, b) =>
+                    b.length - a.length
+            );
 
         for (const name of unique) {
 
-            const raw =
+            let raw =
                 values[name];
 
-            const resolved =
-                this.resolveValue(
-                    raw
-                );
+            let resolved;
+
+            if (
+                raw === undefined
+            ) {
+
+                resolved =
+                    this.getVariable(
+                        name,
+                        localVariables
+                    );
+
+            } else {
+
+                resolved =
+                    this.resolveValue(
+                        raw,
+                        localVariables
+                    );
+            }
 
             const replacement =
                 this.toJavaScriptLiteral(
@@ -1824,7 +2100,9 @@ class WeblyRuntime {
                 result.replace(
                     new RegExp(
                         "\\{" +
-                        this.escapeRegex(name) +
+                        this.escapeRegex(
+                            name
+                        ) +
                         "\\}",
                         "g"
                     ),
@@ -1833,10 +2111,8 @@ class WeblyRuntime {
         }
 
         /*
-            The native mappings in syntax.json use a
-            milliseconds placeholder for timing.
-
-            The Webly definition supplies seconds.
+            Timing definitions provide seconds
+            but their native mapping may use milliseconds.
         */
 
         if (
@@ -1849,7 +2125,8 @@ class WeblyRuntime {
             const seconds =
                 Number(
                     this.resolveValue(
-                        values.seconds
+                        values.seconds,
+                        localVariables
                     )
                 );
 
@@ -1868,18 +2145,27 @@ class WeblyRuntime {
 
     toJavaScriptLiteral(value) {
 
-        if (typeof value === "string") {
-            return JSON.stringify(value);
+        if (
+            typeof value === "string"
+        ) {
+
+            return JSON.stringify(
+                value
+            );
         }
 
         if (
             typeof value === "number" &&
             Number.isFinite(value)
         ) {
+
             return String(value);
         }
 
-        if (typeof value === "boolean") {
+        if (
+            typeof value === "boolean"
+        ) {
+
             return value
                 ? "true"
                 : "false";
@@ -1893,7 +2179,9 @@ class WeblyRuntime {
             return "undefined";
         }
 
-        return JSON.stringify(value);
+        return JSON.stringify(
+            value
+        );
     }
 
 
@@ -1909,16 +2197,18 @@ class WeblyRuntime {
 
         if (
             result &&
-            typeof result.then === "function"
+            typeof result.then ===
+                "function"
         ) {
+
             await result;
         }
     }
 
 
-    /* ---------------------------------------------------------
+    /* =========================================================
        NODE EXECUTION
-    --------------------------------------------------------- */
+    ========================================================= */
 
     async executeNodes(
         nodes,
@@ -1935,7 +2225,7 @@ class WeblyRuntime {
                 nodes[index];
 
             /*
-                Handle if / else-if / else chains together.
+                Handle if / else-if / else chains.
             */
 
             if (
@@ -1951,19 +2241,19 @@ class WeblyRuntime {
                     match &&
                     match.definition.type ===
                         "control" &&
-                    (
-                        match.definition.control ===
-                            "if" ||
-                        match.definition.control ===
-                            "elseIf" ||
-                        match.definition.control ===
-                            "else"
+                    [
+                        "if",
+                        "elseIf",
+                        "else"
+                    ].includes(
+                        match.definition.control
                     )
                 ) {
 
                     const branchNodes = [];
 
-                    let cursor = index;
+                    let cursor =
+                        index;
 
                     while (
                         cursor < nodes.length
@@ -1976,6 +2266,7 @@ class WeblyRuntime {
                             branch.type !==
                             "block"
                         ) {
+
                             break;
                         }
 
@@ -1996,6 +2287,7 @@ class WeblyRuntime {
                                 branchMatch.definition.control
                             )
                         ) {
+
                             break;
                         }
 
@@ -2008,8 +2300,9 @@ class WeblyRuntime {
 
                         if (
                             branchMatch.definition.control ===
-                            "else"
+                                "else"
                         ) {
+
                             break;
                         }
                     }
@@ -2017,12 +2310,17 @@ class WeblyRuntime {
                     let alreadyMatched =
                         false;
 
-                    for (const branch of branchNodes) {
+                    for (
+                        const branch of branchNodes
+                    ) {
 
                         const control =
-                            branch.match.definition.control;
+                            branch.match
+                                .definition
+                                .control;
 
-                        let shouldRun = false;
+                        let shouldRun =
+                            false;
 
                         if (
                             control === "if" ||
@@ -2032,7 +2330,9 @@ class WeblyRuntime {
                             shouldRun =
                                 !alreadyMatched &&
                                 this.evaluateCondition(
-                                    branch.match.values.condition,
+                                    branch.match
+                                        .values
+                                        .condition,
                                     localVariables
                                 );
 
@@ -2122,7 +2422,8 @@ class WeblyRuntime {
 
                 await this.executeProperty(
                     definition,
-                    values
+                    values,
+                    localVariables
                 );
 
                 break;
@@ -2132,7 +2433,8 @@ class WeblyRuntime {
 
                 await this.executeStyle(
                     definition,
-                    values
+                    values,
+                    localVariables
                 );
 
                 break;
@@ -2153,7 +2455,8 @@ class WeblyRuntime {
 
                 await this.executeAction(
                     definition,
-                    values
+                    values,
+                    localVariables
                 );
 
                 break;
@@ -2218,7 +2521,8 @@ class WeblyRuntime {
 
                 await this.executeNative(
                     definition,
-                    values
+                    values,
+                    localVariables
                 );
 
                 break;
@@ -2233,16 +2537,18 @@ class WeblyRuntime {
     }
 
 
-    /* ---------------------------------------------------------
-       STARTUP
-    --------------------------------------------------------- */
+    /* =========================================================
+       START
+    ========================================================= */
 
     async run(source) {
 
         try {
 
             const nodes =
-                this.parse(source);
+                this.parse(
+                    source
+                );
 
             await this.executeNodes(
                 nodes,
@@ -2257,6 +2563,10 @@ class WeblyRuntime {
         }
     }
 
+
+    /* =========================================================
+       ERROR DISPLAY
+    ========================================================= */
 
     reportError(error) {
 
@@ -2338,9 +2648,9 @@ class WeblyRuntime {
 }
 
 
-/* -------------------------------------------------------------
+/* =============================================================
    FILE LOADING
-------------------------------------------------------------- */
+============================================================= */
 
 async function loadJSON(url) {
 
@@ -2384,9 +2694,9 @@ async function loadText(url) {
 }
 
 
-/* -------------------------------------------------------------
+/* =============================================================
    WEBLY START
-------------------------------------------------------------- */
+============================================================= */
 
 async function startWebly() {
 
