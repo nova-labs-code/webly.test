@@ -238,13 +238,60 @@ function wait(seconds) {
 
 
 /* =========================
+   VARIABLE LOOKUP
+========================= */
+
+function getVariable(name, localVariables = null) {
+
+    if (
+        localVariables &&
+        Object.prototype.hasOwnProperty.call(
+            localVariables,
+            name
+        )
+    ) {
+        return localVariables[name];
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            variables,
+            name
+        )
+    ) {
+        return variables[name];
+    }
+
+    return undefined;
+}
+
+
+/* =========================
+   VARIABLE SET
+========================= */
+
+function setVariable(
+    name,
+    value,
+    localVariables = null
+) {
+
+    if (localVariables) {
+        localVariables[name] = value;
+    } else {
+        variables[name] = value;
+    }
+}
+
+
+/* =========================
    VALUE PARSER
 ========================= */
 
 function parseValue(
     value,
     localElements = {},
-    localVariables = {}
+    localVariables = null
 ) {
 
     value = value.trim();
@@ -273,27 +320,16 @@ function parseValue(
     }
 
 
-    /* LOCAL VARIABLE */
+    /* VARIABLE */
 
-    if (
-        Object.prototype.hasOwnProperty.call(
-            localVariables,
-            value
-        )
-    ) {
-        return localVariables[value];
-    }
+    const variableValue =
+        getVariable(
+            value,
+            localVariables
+        );
 
-
-    /* GLOBAL VARIABLE */
-
-    if (
-        Object.prototype.hasOwnProperty.call(
-            variables,
-            value
-        )
-    ) {
-        return variables[value];
+    if (variableValue !== undefined) {
+        return variableValue;
     }
 
 
@@ -316,62 +352,13 @@ function parseValue(
 
 
 /* =========================
-   VARIABLE ASSIGNMENT
-========================= */
-
-function setVariable(
-    name,
-    value,
-    localVariables = null
-) {
-
-    if (localVariables) {
-        localVariables[name] = value;
-    } else {
-        variables[name] = value;
-    }
-}
-
-
-/* =========================
-   GET VARIABLE
-========================= */
-
-function getVariable(
-    name,
-    localVariables = {}
-) {
-
-    if (
-        Object.prototype.hasOwnProperty.call(
-            localVariables,
-            name
-        )
-    ) {
-        return localVariables[name];
-    }
-
-    if (
-        Object.prototype.hasOwnProperty.call(
-            variables,
-            name
-        )
-    ) {
-        return variables[name];
-    }
-
-    return undefined;
-}
-
-
-/* =========================
    EXECUTE LINE
 ========================= */
 
 async function executeLine(
     line,
     localElements = {},
-    localVariables = {}
+    localVariables = null
 ) {
 
     line = line.trim();
@@ -404,7 +391,7 @@ async function executeLine(
 
 
     /* =========================
-       PAGE PROPERTY
+       PAGE BACKGROUND
     ========================= */
 
     const pageMatch = line.match(
@@ -473,17 +460,17 @@ async function executeLine(
        ELEMENT +=
     ========================= */
 
-    const addMatch = line.match(
+    const elementAddMatch = line.match(
         /^(\w+)\.(\w+)\s*\+=\s*(.+)$/
     );
 
-    if (addMatch) {
+    if (elementAddMatch) {
 
-        const name = addMatch[1];
-        const property = addMatch[2];
+        const name = elementAddMatch[1];
+        const property = elementAddMatch[2];
 
         const value = parseValue(
-            addMatch[3],
+            elementAddMatch[3],
             localElements,
             localVariables
         );
@@ -501,7 +488,9 @@ async function executeLine(
         } else {
 
             const current =
-                Number(element[property] || 0);
+                Number(
+                    element[property] || 0
+                );
 
             setProperty(
                 element,
@@ -515,17 +504,57 @@ async function executeLine(
 
 
     /* =========================
+       ELEMENT -=
+    ========================= */
+
+    const elementSubtractMatch = line.match(
+        /^(\w+)\.(\w+)\s*-\=\s*(.+)$/
+    );
+
+    if (elementSubtractMatch) {
+
+        const name = elementSubtractMatch[1];
+        const property = elementSubtractMatch[2];
+
+        const value = parseValue(
+            elementSubtractMatch[3],
+            localElements,
+            localVariables
+        );
+
+        const element =
+            localElements[name] ||
+            elements[name];
+
+        if (!element) return;
+
+        const current =
+            Number(
+                element[property] || 0
+            );
+
+        setProperty(
+            element,
+            property,
+            current - Number(value)
+        );
+
+        return;
+    }
+
+
+    /* =========================
        ELEMENT PROPERTY =
     ========================= */
 
-    const assignmentMatch = line.match(
+    const elementAssignmentMatch = line.match(
         /^(\w+)\.(\w+)\s*=\s*(.+)$/
     );
 
-    if (assignmentMatch) {
+    if (elementAssignmentMatch) {
 
-        const name = assignmentMatch[1];
-        const property = assignmentMatch[2];
+        const name = elementAssignmentMatch[1];
+        const property = elementAssignmentMatch[2];
 
         const element =
             localElements[name] ||
@@ -534,7 +563,7 @@ async function executeLine(
         if (!element) return;
 
         const value = parseValue(
-            assignmentMatch[3],
+            elementAssignmentMatch[3],
             localElements,
             localVariables
         );
@@ -550,7 +579,7 @@ async function executeLine(
 
 
     /* =========================
-       VARIABLE +=
+       VARIABLE MATH
     ========================= */
 
     const variableMathMatch = line.match(
@@ -568,10 +597,11 @@ async function executeLine(
             localVariables
         );
 
-        let current = getVariable(
-            name,
-            localVariables
-        );
+        let current =
+            getVariable(
+                name,
+                localVariables
+            );
 
         if (current === undefined) {
             current = 0;
@@ -642,7 +672,7 @@ async function executeLine(
 async function executeBlock(
     body,
     localElements = {},
-    localVariables = {}
+    localVariables = null
 ) {
 
     const lines =
@@ -669,7 +699,7 @@ async function executeBlock(
 async function executeForever(
     body,
     localElements = {},
-    localVariables = {}
+    localVariables = null
 ) {
 
     while (true) {
@@ -707,7 +737,9 @@ async function executeFunctionBody(
         }
 
 
-        /* REPEAT FOREVER */
+        /* =========================
+           REPEAT FOREVER
+        ========================= */
 
         if (
             line === "repeat forever {" ||
@@ -798,14 +830,10 @@ async function callFunction(name, args) {
         const argument =
             args[i];
 
-        const value =
-            parseValue(
-                argument,
-                {},
-                variables
-            );
-
-        if (elements[argument]) {
+        if (
+            argument &&
+            elements[argument]
+        ) {
 
             localElements[parameter] =
                 elements[argument];
@@ -813,7 +841,11 @@ async function callFunction(name, args) {
         } else {
 
             localVariables[parameter] =
-                value;
+                parseValue(
+                    argument || "",
+                    {},
+                    null
+                );
         }
     }
 
@@ -950,7 +982,7 @@ async function runWebly(code) {
         await executeLine(
             line,
             {},
-            {}
+            null
         );
 
         i++;
