@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
 
@@ -8,10 +7,19 @@
         content="width=device-width,
         initial-scale=1.0,
         maximum-scale=1.0,
-        user-scalable=no,
-        viewport-fit=cover">
+        user-scalable=no">
 
     <title>Webly</title>
+
+    <style>
+        html,
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            min-height: 100%;
+        }
+    </style>
 </head>
 
 <body>
@@ -20,341 +28,92 @@
 "use strict";
 
 /*
-    Webly Runtime
-    --------------
-    This file does not define Webly language syntax.
+    WEBLY RUNTIME
 
-    Webly syntax comes from:
-        syntax.json
+    This runtime does not contain Webly keywords such as:
 
-    Webly source comes from:
-        main.webly
+        button
+        page
+        wait
+        function
+        repeat
+        if
+        clicked
 
-    The runtime only provides the machinery required to:
-        - load definitions
-        - match Webly statements
-        - resolve variables
-        - execute blocks
-        - execute native mappings
-        - create DOM elements
-        - attach events
-        - run functions
-        - run loops
-        - wait asynchronously
+    Those come from syntax.json.
+
+    The runtime only understands generic definition types
+    described by syntax.json.
 */
-
 
 class WeblyRuntime {
 
     constructor(syntax) {
-        this.syntax = syntax;
+        this.syntax = syntax || {};
 
-        this.globalVariables = {};
+        this.definitions = [];
+
+        this.variables = {};
         this.functions = {};
+
         this.elements = {};
 
-        this.running = true;
+        this.running = false;
+
+        this.collectDefinitions(this.syntax);
     }
 
 
-    /*
-        ----------------------------------------------------
-        SYNTAX DEFINITIONS
-        ----------------------------------------------------
-    */
+    /* ---------------------------------------------------------
+       SYNTAX DEFINITIONS
+    --------------------------------------------------------- */
 
-    getDefinitions() {
+    collectDefinitions(value) {
 
-        const result = [];
+        if (!value || typeof value !== "object") {
+            return;
+        }
 
-        const walk = (value) => {
+        if (Array.isArray(value)) {
 
-            if (!value || typeof value !== "object") {
-                return;
+            for (const item of value) {
+                this.collectDefinitions(item);
             }
 
-            if (Array.isArray(value)) {
+            return;
+        }
 
-                for (const item of value) {
-                    walk(item);
-                }
-
-                return;
-            }
-
-            if (
-                typeof value.webly === "string" &&
+        if (
+            typeof value.type === "string" &&
+            (
+                typeof value.webly === "string" ||
                 typeof value.original === "string"
-            ) {
-                result.push(value);
-            }
+            )
+        ) {
+            this.definitions.push(value);
+        }
 
-            for (const key of Object.keys(value)) {
-                walk(value[key]);
-            }
-        };
-
-        walk(this.syntax);
-
-        return result;
-    }
-
-
-    /*
-        ----------------------------------------------------
-        SOURCE PARSING
-        ----------------------------------------------------
-    */
-
-    splitLines(source) {
-
-        return source
-            .replace(/\r\n/g, "\n")
-            .replace(/\r/g, "\n")
-            .split("\n");
-    }
-
-
-    stripComments(source) {
-
-        return source
-            .replace(/\/\*[\s\S]*?\*\//g, "")
-            .replace(/(^|\s)\/\/.*$/gm, "$1");
-    }
-
-
-    /*
-        Finds the matching closing brace.
-    */
-
-    findMatchingBrace(source, openingIndex) {
-
-        let depth = 0;
-        let quote = null;
-        let escaped = false;
-
-        for (let i = openingIndex; i < source.length; i++) {
-
-            const char = source[i];
-
-            if (escaped) {
-                escaped = false;
-                continue;
-            }
-
-            if (char === "\\") {
-                escaped = true;
-                continue;
-            }
-
-            if (quote) {
-
-                if (char === quote) {
-                    quote = null;
-                }
-
-                continue;
-            }
+        for (const key of Object.keys(value)) {
 
             if (
-                char === '"' ||
-                char === "'" ||
-                char === "`"
+                key === "webly" ||
+                key === "original"
             ) {
-                quote = char;
                 continue;
             }
 
-            if (char === "{") {
-                depth++;
-            }
-
-            if (char === "}") {
-
-                depth--;
-
-                if (depth === 0) {
-                    return i;
-                }
-            }
+            this.collectDefinitions(value[key]);
         }
-
-        return -1;
     }
 
 
-    /*
-        Converts source into statements while preserving
-        block contents.
-    */
+    /* ---------------------------------------------------------
+       PLACEHOLDER PARSING
+    --------------------------------------------------------- */
 
-    parseStatements(source) {
+    escapeRegex(text) {
 
-        const statements = [];
-
-        let i = 0;
-
-        while (i < source.length) {
-
-            while (
-                i < source.length &&
-                /\s/.test(source[i])
-            ) {
-                i++;
-            }
-
-            if (i >= source.length) {
-                break;
-            }
-
-            const start = i;
-
-            let quote = null;
-            let escaped = false;
-            let parenDepth = 0;
-
-            while (i < source.length) {
-
-                const char = source[i];
-
-                if (escaped) {
-                    escaped = false;
-                    i++;
-                    continue;
-                }
-
-                if (char === "\\") {
-                    escaped = true;
-                    i++;
-                    continue;
-                }
-
-                if (quote) {
-
-                    if (char === quote) {
-                        quote = null;
-                    }
-
-                    i++;
-                    continue;
-                }
-
-                if (
-                    char === '"' ||
-                    char === "'" ||
-                    char === "`"
-                ) {
-                    quote = char;
-                    i++;
-                    continue;
-                }
-
-                if (char === "(") {
-                    parenDepth++;
-                }
-
-                if (char === ")") {
-                    parenDepth--;
-                }
-
-                /*
-                    A block begins here.
-                */
-
-                if (
-                    char === "{" &&
-                    parenDepth === 0
-                ) {
-
-                    const end = this.findMatchingBrace(
-                        source,
-                        i
-                    );
-
-                    if (end === -1) {
-                        throw new Error(
-                            "Unclosed block in Webly source."
-                        );
-                    }
-
-                    const header = source
-                        .slice(start, i)
-                        .trim();
-
-                    const body = source
-                        .slice(i + 1, end);
-
-                    statements.push({
-                        type: "block",
-                        header,
-                        body
-                    });
-
-                    i = end + 1;
-
-                    break;
-                }
-
-                /*
-                    Newline ends a normal statement.
-                */
-
-                if (
-                    char === "\n" &&
-                    parenDepth === 0
-                ) {
-
-                    const line = source
-                        .slice(start, i)
-                        .trim();
-
-                    if (line) {
-                        statements.push({
-                            type: "line",
-                            value: line
-                        });
-                    }
-
-                    i++;
-                    break;
-                }
-
-                i++;
-            }
-
-            /*
-                End of source.
-            */
-
-            if (i >= source.length) {
-
-                const remaining = source
-                    .slice(start)
-                    .trim();
-
-                if (remaining) {
-
-                    statements.push({
-                        type: "line",
-                        value: remaining
-                    });
-                }
-            }
-        }
-
-        return statements;
-    }
-
-
-    /*
-        ----------------------------------------------------
-        TEMPLATE MATCHING
-        ----------------------------------------------------
-    */
-
-    escapeRegExp(value) {
-
-        return value.replace(
+        return text.replace(
             /[.*+?^${}()|[\]\\]/g,
             "\\$&"
         );
@@ -368,13 +127,13 @@ class WeblyRuntime {
         let pattern = "";
         let last = 0;
 
-        const regex = /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g;
+        const expression = /\{([A-Za-z_][A-Za-z0-9_]*)\}/g;
 
         let match;
 
-        while ((match = regex.exec(template))) {
+        while ((match = expression.exec(template)) !== null) {
 
-            pattern += this.escapeRegExp(
+            pattern += this.escapeRegex(
                 template.slice(last, match.index)
             );
 
@@ -383,10 +142,10 @@ class WeblyRuntime {
             placeholders.push(name);
 
             /*
-                Non-greedy capture.
+                Values are intentionally broad here.
 
-                It stops naturally at the next literal
-                section of the syntax template.
+                The definition itself determines what the
+                resulting value means.
             */
 
             pattern += "([\\s\\S]*?)";
@@ -394,7 +153,7 @@ class WeblyRuntime {
             last = match.index + match[0].length;
         }
 
-        pattern += this.escapeRegExp(
+        pattern += this.escapeRegex(
             template.slice(last)
         );
 
@@ -407,35 +166,20 @@ class WeblyRuntime {
     }
 
 
-    matchDefinition(definition, text) {
+    matchDefinition(line, definition) {
 
         if (!definition.webly) {
             return null;
         }
 
-        /*
-            Block definitions contain "..." as the body
-            placeholder.
-        */
-
-        const template = definition.webly;
-
-        const hasBody = template.includes("...");
-
-        let cleanTemplate = template;
-
-        if (hasBody) {
-            cleanTemplate = cleanTemplate.replace(
-                /\.\.\./g,
-                ""
-            );
-        }
-
-        const converted = this.templateToRegex(
-            cleanTemplate
+        const {
+            regex,
+            placeholders
+        } = this.templateToRegex(
+            definition.webly
         );
 
-        const match = converted.regex.exec(text);
+        const match = line.match(regex);
 
         if (!match) {
             return null;
@@ -443,45 +187,31 @@ class WeblyRuntime {
 
         const values = {};
 
-        converted.placeholders.forEach(
+        placeholders.forEach(
             (name, index) => {
                 values[name] = match[index + 1];
             }
         );
 
-        return {
-            definition,
-            values
-        };
+        return values;
     }
 
 
-    findDefinition(text) {
+    findDefinition(line) {
 
-        const definitions = this.getDefinitions();
+        for (const definition of this.definitions) {
 
-        /*
-            Prefer longer templates first.
-
-            This prevents a generic definition from
-            stealing a more specific definition.
-        */
-
-        definitions.sort(
-            (a, b) =>
-                (b.webly || "").length -
-                (a.webly || "").length
-        );
-
-        for (const definition of definitions) {
-
-            const result = this.matchDefinition(
-                definition,
-                text
+            const values = this.matchDefinition(
+                line,
+                definition
             );
 
-            if (result) {
-                return result;
+            if (values) {
+
+                return {
+                    definition,
+                    values
+                };
             }
         }
 
@@ -489,11 +219,9 @@ class WeblyRuntime {
     }
 
 
-    /*
-        ----------------------------------------------------
-        VALUE RESOLUTION
-        ----------------------------------------------------
-    */
+    /* ---------------------------------------------------------
+       VALUE RESOLUTION
+    --------------------------------------------------------- */
 
     resolveValue(value, locals = {}) {
 
@@ -501,37 +229,29 @@ class WeblyRuntime {
             return value;
         }
 
-        let text = String(value).trim();
+        value = String(value).trim();
 
         /*
-            String literal
+            Strings
         */
 
         if (
-            text.length >= 2 &&
+            value.length >= 2 &&
             (
                 (
-                    text.startsWith('"') &&
-                    text.endsWith('"')
+                    value.startsWith('"') &&
+                    value.endsWith('"')
                 ) ||
                 (
-                    text.startsWith("'") &&
-                    text.endsWith("'")
+                    value.startsWith("'") &&
+                    value.endsWith("'")
                 )
             )
         ) {
-
-            try {
-                return JSON.parse(
-                    text.startsWith("'")
-                        ? JSON.stringify(
-                            text.slice(1, -1)
-                        )
-                        : text
-                );
-            } catch {
-                return text.slice(1, -1);
-            }
+            return value.slice(
+                1,
+                -1
+            );
         }
 
 
@@ -539,11 +259,11 @@ class WeblyRuntime {
             Boolean
         */
 
-        if (text === "true") {
+        if (value === "true") {
             return true;
         }
 
-        if (text === "false") {
+        if (value === "false") {
             return false;
         }
 
@@ -552,7 +272,7 @@ class WeblyRuntime {
             Null
         */
 
-        if (text === "null") {
+        if (value === "null") {
             return null;
         }
 
@@ -562,9 +282,9 @@ class WeblyRuntime {
         */
 
         if (
-            /^-?(?:\d+(?:\.\d+)?|\.\d+)$/.test(text)
+            /^-?(?:\d+\.?\d*|\.\d+)$/.test(value)
         ) {
-            return Number(text);
+            return Number(value);
         }
 
 
@@ -575,10 +295,10 @@ class WeblyRuntime {
         if (
             Object.prototype.hasOwnProperty.call(
                 locals,
-                text
+                value
             )
         ) {
-            return locals[text];
+            return locals[value];
         }
 
 
@@ -588,438 +308,313 @@ class WeblyRuntime {
 
         if (
             Object.prototype.hasOwnProperty.call(
-                this.globalVariables,
-                text
+                this.variables,
+                value
             )
         ) {
-            return this.globalVariables[text];
+            return this.variables[value];
         }
 
 
         /*
-            Operators / expressions.
+            Simple arithmetic.
 
-            These are evaluated against the Webly
-            variable environment rather than requiring
-            Webly keywords to be hardcoded into HTML.
+            This allows things such as:
+
+                score + 1
+                wait * 2
+                x - 5
         */
 
-        return this.evaluateExpression(
-            text,
-            locals
-        );
-    }
+        if (
+            /^[A-Za-z0-9_.$\s+\-*/%()]+$/.test(value)
+        ) {
 
-
-    evaluateExpression(expression, locals = {}) {
-
-        const variables = {
-            ...this.globalVariables,
-            ...locals
-        };
-
-        /*
-            Replace variable identifiers with values
-            through a controlled function scope.
-
-            The expression is still evaluated as JavaScript
-            because the Webly syntax definition determines
-            the surrounding operation.
-        */
-
-        try {
-
-            const names = Object.keys(variables);
-            const values = Object.values(variables);
-
-            const fn = new Function(
-                ...names,
-                `"use strict"; return (${expression});`
-            );
-
-            return fn(...values);
-
-        } catch {
-
-            /*
-                If it isn't an expression, treat it as
-                a plain value/name.
-            */
+            const names = Object.keys({
+                ...this.variables,
+                ...locals
+            });
 
             if (
-                Object.prototype.hasOwnProperty.call(
-                    variables,
-                    expression
+                names.some(
+                    name =>
+                        value === name ||
+                        value.includes(name)
                 )
             ) {
-                return variables[expression];
-            }
 
-            return expression;
-        }
-    }
+                try {
 
+                    const scope = {
+                        ...this.variables,
+                        ...locals
+                    };
 
-    setVariable(name, value, locals = null) {
+                    const keys = Object.keys(scope);
+                    const vals = Object.values(scope);
 
-        if (locals) {
-            locals[name] = value;
-        } else {
-            this.globalVariables[name] = value;
-        }
-    }
-
-
-    /*
-        ----------------------------------------------------
-        PLACEHOLDER SUBSTITUTION
-        ----------------------------------------------------
-    */
-
-    substitute(template, values, locals = {}) {
-
-        return template.replace(
-            /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g,
-            (full, name) => {
-
-                if (
-                    Object.prototype.hasOwnProperty.call(
-                        values,
-                        name
-                    )
-                ) {
-                    return values[name];
-                }
-
-                return full;
-            }
-        );
-    }
-
-
-    substituteNative(
-        template,
-        values,
-        locals = {}
-    ) {
-
-        return template.replace(
-            /\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g,
-            (full, name) => {
-
-                let value;
-
-                if (
-                    Object.prototype.hasOwnProperty.call(
-                        values,
-                        name
-                    )
-                ) {
-                    value = values[name];
-                } else {
-                    value = this.resolveValue(
-                        name,
-                        locals
+                    const fn = new Function(
+                        ...keys,
+                        `"use strict"; return (${value});`
                     );
+
+                    return fn(...vals);
+
+                } catch {
+                    /* Fall through */
                 }
-
-                /*
-                    Values going into JavaScript need to
-                    become valid JavaScript expressions.
-                */
-
-                return this.toJavaScriptValue(
-                    value
-                );
             }
-        );
+        }
+
+        return value;
     }
 
 
-    toJavaScriptValue(value) {
+    /* ---------------------------------------------------------
+       ASSIGNMENT
+    --------------------------------------------------------- */
 
-        if (typeof value === "string") {
-            return JSON.stringify(value);
-        }
+    executeAssignment(values, locals) {
 
-        if (typeof value === "number") {
-            return String(value);
-        }
+        const name = String(
+            values.name || ""
+        ).trim();
 
-        if (typeof value === "boolean") {
-            return String(value);
-        }
+        const operator = String(
+            values.operator || "="
+        ).trim();
 
-        if (value === null) {
-            return "null";
-        }
-
-        if (value === undefined) {
-            return "undefined";
-        }
-
-        return JSON.stringify(value);
-    }
-
-
-    /*
-        ----------------------------------------------------
-        DOM
-        ----------------------------------------------------
-    */
-
-    getElement(name) {
-
-        if (this.elements[name]) {
-            return this.elements[name];
-        }
-
-        const element = document.getElementById(name);
-
-        if (element) {
-            this.elements[name] = element;
-        }
-
-        return element;
-    }
-
-
-    createElement(
-        definition,
-        values
-    ) {
-
-        const tag =
-            values.tag ||
-            definition.tag ||
-            values.type;
-
-        const name =
-            values.name ||
-            values.id;
-
-        if (!tag || !name) {
-            return null;
-        }
-
-        const element = document.createElement(
-            tag
-        );
-
-        element.id = name;
-
-        document.body.appendChild(
-            element
-        );
-
-        this.elements[name] = element;
-
-        return element;
-    }
-
-
-    /*
-        ----------------------------------------------------
-        NATIVE EXECUTION
-        ----------------------------------------------------
-    */
-
-    async executeNative(
-        nativeCode,
-        values = {},
-        locals = {}
-    ) {
-
-        const code = this.substituteNative(
-            nativeCode,
-            values,
-            locals
-        );
-
-        /*
-            Native code from syntax.json is executed
-            asynchronously so definitions such as wait()
-            can use await.
-        */
-
-        const names = Object.keys(
-            this.globalVariables
-        );
-
-        const variableValues = names.map(
-            name => this.globalVariables[name]
-        );
-
-        const fn = new Function(
-            ...names,
-            "runtime",
-            "locals",
-            `
-                "use strict";
-
-                ${code}
-            `
-        );
-
-        return await fn(
-            ...variableValues,
-            this,
-            locals
-        );
-    }
-
-
-    /*
-        ----------------------------------------------------
-        ASSIGNMENT
-        ----------------------------------------------------
-    */
-
-    async executeAssignment(
-        definition,
-        values,
-        locals
-    ) {
-
-        const name =
-            values.name ||
-            values.variable;
+        const rawValue = values.value;
 
         if (!name) {
             return;
         }
 
-        let value;
-
-        if (
-            Object.prototype.hasOwnProperty.call(
-                values,
-                "value"
-            )
-        ) {
-            value = this.resolveValue(
-                values.value,
-                locals
-            );
-        } else {
-            value = undefined;
-        }
-
-        this.setVariable(
-            name.trim(),
-            value,
-            locals
-        );
-    }
-
-
-    /*
-        ----------------------------------------------------
-        PROPERTY
-        ----------------------------------------------------
-    */
-
-    async executeProperty(
-        definition,
-        values,
-        locals
-    ) {
-
-        const native = definition.original;
-
-        if (native) {
-
-            await this.executeNative(
-                native,
-                values,
-                locals
-            );
-
-            return;
-        }
-
-        const elementName =
-            values.element ||
-            values.target;
-
-        const element =
-            elementName === "page"
-                ? document.body
-                : this.getElement(
-                    elementName
-                );
-
-        if (!element) {
-            return;
-        }
-
-        const property =
-            definition.property;
-
         const value = this.resolveValue(
-            values.value,
+            rawValue,
             locals
         );
 
-        if (
-            property === "text" ||
-            property === "content"
-        ) {
-            element.textContent = value;
-            return;
-        }
 
-        if (
-            property === "color" ||
-            property === "background" ||
-            property === "backgroundColor"
-        ) {
+        if (operator === "=") {
 
-            if (property === "background") {
-                element.style.background =
-                    value;
+            if (locals) {
+                locals[name] = value;
             } else {
-                element.style[property] =
-                    value;
+                this.variables[name] = value;
             }
 
             return;
         }
 
+
+        const current =
+            locals &&
+            Object.prototype.hasOwnProperty.call(
+                locals,
+                name
+            )
+                ? locals[name]
+                : this.variables[name];
+
+
+        let result;
+
+        switch (operator) {
+
+            case "+=":
+                result = current + value;
+                break;
+
+            case "-=":
+                result = current - value;
+                break;
+
+            case "*=":
+                result = current * value;
+                break;
+
+            case "/=":
+                result = current / value;
+                break;
+
+            case "%=":
+                result = current % value;
+                break;
+
+            default:
+                result = value;
+        }
+
+
+        if (locals) {
+            locals[name] = result;
+        } else {
+            this.variables[name] = result;
+        }
+    }
+
+
+    /* ---------------------------------------------------------
+       ELEMENTS
+    --------------------------------------------------------- */
+
+    createElement(values, definition) {
+
+        const type =
+            values.type ||
+            definition.tag ||
+            "div";
+
+        const name =
+            this.resolveValue(
+                values.name
+            );
+
+        if (!name) {
+            return;
+        }
+
+        const element =
+            document.createElement(
+                String(type)
+            );
+
+        element.id = String(name);
+
+        document.body.appendChild(
+            element
+        );
+
+        this.elements[String(name)] =
+            element;
+    }
+
+
+    getElement(name) {
+
+        name = this.resolveValue(name);
+
+        if (
+            this.elements[
+                String(name)
+            ]
+        ) {
+            return this.elements[
+                String(name)
+            ];
+        }
+
+        return document.getElementById(
+            String(name)
+        );
+    }
+
+
+    /* ---------------------------------------------------------
+       PROPERTY
+    --------------------------------------------------------- */
+
+    executeProperty(
+        values,
+        definition,
+        locals
+    ) {
+
+        const targetName =
+            this.resolveValue(
+                values.target ||
+                values.element ||
+                definition.target,
+                locals
+            );
+
+        const property =
+            definition.property ||
+            definition.name;
+
+        const value =
+            this.resolveValue(
+                values.value,
+                locals
+            );
+
+
+        /*
+            page/body-style properties
+        */
+
+        if (
+            definition.target === "page" ||
+            targetName === "page"
+        ) {
+
+            const body = document.body;
+
+            if (property) {
+
+                if (
+                    property === "background"
+                ) {
+                    body.style.background =
+                        value;
+                    return;
+                }
+
+                if (
+                    property === "color"
+                ) {
+                    body.style.color =
+                        value;
+                    return;
+                }
+            }
+        }
+
+
+        const element =
+            this.getElement(
+                targetName
+            );
+
+        if (!element) {
+            return;
+        }
+
+
         if (property) {
 
-            element.style[property] =
+            if (
+                property in element.style
+            ) {
+
+                element.style[property] =
+                    value;
+
+                return;
+            }
+
+            element[property] =
                 value;
         }
     }
 
 
-    /*
-        ----------------------------------------------------
-        ACTION
-        ----------------------------------------------------
-    */
+    /* ---------------------------------------------------------
+       STYLE
+    --------------------------------------------------------- */
 
-    async executeAction(
-        definition,
+    executeStyle(
         values,
+        definition,
         locals
     ) {
 
-        if (definition.original) {
-
-            await this.executeNative(
-                definition.original,
-                values,
+        const elementName =
+            this.resolveValue(
+                values.element,
                 locals
             );
-
-            return;
-        }
-
-        const elementName =
-            values.element ||
-            values.target;
 
         const element =
             this.getElement(
@@ -1030,120 +625,364 @@ class WeblyRuntime {
             return;
         }
 
-        const action =
-            definition.action || "";
+        const property =
+            definition.property;
 
         const value =
-            definition.value;
+            this.resolveValue(
+                values.value,
+                locals
+            );
 
-        const parts =
-            action.split(".");
+        if (property) {
+
+            element.style[property] =
+                value;
+        }
+    }
+
+
+    /* ---------------------------------------------------------
+       ACTION
+    --------------------------------------------------------- */
+
+    executeAction(
+        values,
+        definition,
+        locals
+    ) {
+
+        const elementName =
+            this.resolveValue(
+                values.element,
+                locals
+            );
+
+        const element =
+            this.getElement(
+                elementName
+            );
+
+        if (!element) {
+            return;
+        }
+
+
+        const action =
+            definition.action;
+
+
+        /*
+            The action definition determines
+            the native operation.
+        */
 
         if (
-            parts[0] === "style" &&
-            parts[1]
+            action === "style.display" &&
+            definition.value !== undefined
         ) {
 
-            element.style[parts[1]] =
-                value;
+            element.style.display =
+                definition.value;
 
             return;
         }
 
-        if (action === "hide") {
-            element.hidden = true;
+
+        if (
+            action in element &&
+            typeof element[action] === "function"
+        ) {
+
+            element[action]();
+
+            return;
         }
 
-        if (action === "show") {
-            element.hidden = false;
-        }
 
-        if (action === "disable") {
-            element.disabled = true;
-        }
+        if (
+            action in element
+        ) {
 
-        if (action === "enable") {
-            element.disabled = false;
+            element[action] =
+                definition.value;
         }
     }
 
 
-    /*
-        ----------------------------------------------------
-        ELEMENT CREATION
-        ----------------------------------------------------
-    */
+    /* ---------------------------------------------------------
+       TIMING
+    --------------------------------------------------------- */
 
-    async executeElement(
+    async executeTiming(
+        values,
         definition,
-        values
+        locals
     ) {
 
-        const native =
-            definition.original;
-
-        if (
-            native &&
-            native.trim().startsWith("<")
-        ) {
-
-            const html =
-                this.substituteNative(
-                    native,
-                    values
-                );
-
-            const wrapper =
-                document.createElement(
-                    "div"
-                );
-
-            wrapper.innerHTML =
-                html.trim();
-
-            const element =
-                wrapper.firstElementChild;
-
-            if (!element) {
-                return;
-            }
-
-            document.body.appendChild(
-                element
+        const seconds =
+            Number(
+                this.resolveValue(
+                    values.seconds,
+                    locals
+                )
             );
 
-            if (element.id) {
-                this.elements[
-                    element.id
-                ] = element;
-            }
-
-            return element;
+        if (
+            !Number.isFinite(seconds)
+        ) {
+            return;
         }
 
-        return this.createElement(
-            definition,
-            values
+        await new Promise(
+            resolve =>
+                setTimeout(
+                    resolve,
+                    Math.max(
+                        0,
+                        seconds * 1000
+                    )
+                )
         );
     }
 
 
-    /*
-        ----------------------------------------------------
-        EVENTS
-        ----------------------------------------------------
-    */
+    /* ---------------------------------------------------------
+       FUNCTIONS
+    --------------------------------------------------------- */
 
-    async executeEvent(
-        definition,
+    registerFunction(
         values,
         body
     ) {
 
+        const name =
+            String(
+                values.name || ""
+            ).trim();
+
+        if (!name) {
+            return;
+        }
+
+        this.functions[name] = {
+            body
+        };
+    }
+
+
+    async callFunction(
+        name,
+        locals = {}
+    ) {
+
+        name = String(name).trim();
+
+        const fn =
+            this.functions[name];
+
+        if (!fn) {
+
+            throw new Error(
+                `Webly function not found: ${name}`
+            );
+        }
+
+        await this.executeBlock(
+            fn.body,
+            locals
+        );
+    }
+
+
+    /* ---------------------------------------------------------
+       CONTROL FLOW
+    --------------------------------------------------------- */
+
+    evaluateCondition(
+        condition,
+        locals
+    ) {
+
+        condition =
+            String(condition)
+                .trim();
+
+
+        /*
+            Basic negation
+        */
+
+        if (
+            condition.startsWith("not ")
+        ) {
+
+            return !this.evaluateCondition(
+                condition.slice(4),
+                locals
+            );
+        }
+
+
+        const scope = {
+            ...this.variables,
+            ...locals
+        };
+
+
+        try {
+
+            const keys =
+                Object.keys(scope);
+
+            const vals =
+                Object.values(scope);
+
+
+            const fn =
+                new Function(
+                    ...keys,
+                    `"use strict"; return (${condition});`
+                );
+
+            return Boolean(
+                fn(...vals)
+            );
+
+        } catch {
+
+            return Boolean(
+                this.resolveValue(
+                    condition,
+                    locals
+                )
+            );
+        }
+    }
+
+
+    async executeControl(
+        values,
+        definition,
+        body,
+        locals
+    ) {
+
+        const condition =
+            values.condition;
+
+
+        if (
+            definition.control === "if"
+        ) {
+
+            if (
+                this.evaluateCondition(
+                    condition,
+                    locals
+                )
+            ) {
+
+                await this.executeBlock(
+                    body,
+                    locals
+                );
+            }
+        }
+    }
+
+
+    /* ---------------------------------------------------------
+       NATIVE
+    --------------------------------------------------------- */
+
+    executeNative(
+        values,
+        definition,
+        locals
+    ) {
+
+        if (
+            !definition.original
+        ) {
+            return;
+        }
+
+        /*
+            Native definitions are executed only
+            when explicitly represented by syntax.json.
+        */
+
+        let code =
+            definition.original;
+
+
+        for (
+            const [key, value]
+            of Object.entries(values)
+        ) {
+
+            const resolved =
+                this.resolveValue(
+                    value,
+                    locals
+                );
+
+
+            const safe =
+                typeof resolved === "string"
+                    ? JSON.stringify(resolved)
+                    : String(resolved);
+
+
+            code =
+                code.replace(
+                    new RegExp(
+                        "\\{" +
+                        this.escapeRegex(key) +
+                        "\\}",
+                        "g"
+                    ),
+                    safe
+                );
+        }
+
+
+        try {
+
+            const fn =
+                new Function(
+                    code
+                );
+
+            return fn();
+
+        } catch (error) {
+
+            console.error(
+                "Webly native execution error:",
+                error
+            );
+        }
+    }
+
+
+    /* ---------------------------------------------------------
+       EVENTS
+    --------------------------------------------------------- */
+
+    registerEvent(
+        values,
+        definition,
+        body,
+        locals
+    ) {
+
         const elementName =
-            values.element ||
-            values.target ||
-            values.name;
+            this.resolveValue(
+                values.element,
+                locals
+            );
 
         const element =
             this.getElement(
@@ -1161,749 +1000,759 @@ class WeblyRuntime {
             return;
         }
 
+
         element.addEventListener(
             eventName,
             async () => {
 
-                await this.executeBlock(
-                    body,
-                    {}
-                );
-
-            }
-        );
-    }
-
-
-    /*
-        ----------------------------------------------------
-        FUNCTIONS
-        ----------------------------------------------------
-    */
-
-    async registerFunction(
-        definition,
-        values,
-        body
-    ) {
-
-        const name =
-            values.name;
-
-        if (!name) {
-            return;
-        }
-
-        this.functions[
-            name.trim()
-        ] = {
-            body,
-            definition
-        };
-    }
-
-
-    async callFunction(
-        name,
-        locals = {}
-    ) {
-
-        const functionData =
-            this.functions[
-                name.trim()
-            ];
-
-        if (!functionData) {
-            throw new Error(
-                "Webly function not found: " +
-                name
-            );
-        }
-
-        return await this.executeBlock(
-            functionData.body,
-            locals
-        );
-    }
-
-
-    /*
-        ----------------------------------------------------
-        CONTROL FLOW
-        ----------------------------------------------------
-    */
-
-    async executeControl(
-        definition,
-        values,
-        body,
-        locals
-    ) {
-
-        const control =
-            String(
-                definition.control || ""
-            ).toLowerCase();
-
-        /*
-            Conditional control.
-        */
-
-        if (
-            control.includes("if")
-        ) {
-
-            const condition =
-                values.condition;
-
-            const result =
-                this.resolveValue(
-                    condition,
-                    locals
-                );
-
-            if (result) {
-
-                await this.executeBlock(
-                    body,
-                    locals
-                );
-            }
-
-            return;
-        }
-
-
-        /*
-            Infinite repetition.
-
-            This is determined from the syntax definition
-            rather than being a Webly keyword embedded into
-            this HTML file.
-        */
-
-        if (
-            control.includes("repeat") &&
-            (
-                String(
-                    values.mode || ""
-                ).toLowerCase()
-                    .includes("forever")
-                ||
-                String(
-                    definition.webly || ""
-                ).toLowerCase()
-                    .includes("forever")
-            )
-        ) {
-
-            while (this.running) {
-
-                await this.executeBlock(
-                    body,
-                    locals
-                );
-
-                /*
-                    Give the browser event loop a chance
-                    to render between iterations.
-                */
-
-                await Promise.resolve();
-            }
-
-            return;
-        }
-
-
-        /*
-            Generic repeated numeric control.
-        */
-
-        if (
-            control.includes("repeat")
-        ) {
-
-            const count =
-                Number(
-                    this.resolveValue(
-                        values.count,
-                        locals
-                    )
-                );
-
-            if (
-                Number.isFinite(count)
-            ) {
-
-                for (
-                    let i = 0;
-                    i < count;
-                    i++
-                ) {
+                try {
 
                     await this.executeBlock(
                         body,
-                        locals
+                        {
+                            ...locals
+                        }
+                    );
+
+                } catch (error) {
+
+                    this.error(
+                        error
                     );
                 }
             }
-        }
-    }
-
-
-    /*
-        ----------------------------------------------------
-        TIMING
-        ----------------------------------------------------
-    */
-
-    async executeTiming(
-        definition,
-        values,
-        locals
-    ) {
-
-        let seconds;
-
-        if (
-            Object.prototype.hasOwnProperty.call(
-                values,
-                "seconds"
-            )
-        ) {
-
-            seconds =
-                this.resolveValue(
-                    values.seconds,
-                    locals
-                );
-
-        } else {
-
-            seconds = 0;
-        }
-
-        seconds =
-            Number(seconds);
-
-        if (
-            !Number.isFinite(seconds)
-        ) {
-            seconds = 0;
-        }
-
-        await new Promise(
-            resolve =>
-                setTimeout(
-                    resolve,
-                    Math.max(
-                        0,
-                        seconds * 1000
-                    )
-                )
         );
     }
 
 
-    /*
-        ----------------------------------------------------
-        GENERIC DEFINITION EXECUTION
-        ----------------------------------------------------
-    */
+    /* ---------------------------------------------------------
+       BLOCK PARSING
+    --------------------------------------------------------- */
 
-    async executeDefinition(
-        matched,
-        statement,
-        locals
-    ) {
+    extractBlocks(source) {
 
-        const definition =
-            matched.definition;
+        const lines =
+            source.split(/\r?\n/);
 
-        const values =
-            matched.values || {};
+        const result = [];
 
-        const type =
-            String(
-                definition.type || ""
-            ).toLowerCase();
+        let i = 0;
 
-
-        /*
-            Function definition
-        */
-
-        if (
-            type === "function"
+        while (
+            i < lines.length
         ) {
 
-            await this.registerFunction(
-                definition,
-                values,
-                statement.body
-            );
+            const raw =
+                lines[i];
 
-            return;
-        }
+            const line =
+                raw.trim();
 
 
-        /*
-            Event definition
-        */
-
-        if (
-            type === "event"
-        ) {
-
-            await this.executeEvent(
-                definition,
-                values,
-                statement.body
-            );
-
-            return;
-        }
-
-
-        /*
-            Control definition
-        */
-
-        if (
-            type === "control"
-        ) {
-
-            await this.executeControl(
-                definition,
-                values,
-                statement.body,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            Assignment
-        */
-
-        if (
-            type === "assignment"
-        ) {
-
-            await this.executeAssignment(
-                definition,
-                values,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            Timing
-        */
-
-        if (
-            type === "timing"
-        ) {
-
-            await this.executeTiming(
-                definition,
-                values,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            HTML element
-        */
-
-        if (
-            type === "element" ||
-            definition.tag
-        ) {
-
-            await this.executeElement(
-                definition,
-                values
-            );
-
-            return;
-        }
-
-
-        /*
-            Property
-        */
-
-        if (
-            type === "property"
-        ) {
-
-            await this.executeProperty(
-                definition,
-                values,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            Style
-        */
-
-        if (
-            type === "style"
-        ) {
-
-            await this.executeProperty(
-                definition,
-                values,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            Action
-        */
-
-        if (
-            type === "action"
-        ) {
-
-            await this.executeAction(
-                definition,
-                values,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            Function call
-        */
-
-        if (
-            type === "call"
-        ) {
-
-            const name =
-                values.name ||
-                values.function ||
-                values.target;
-
-            if (name) {
-
-                await this.callFunction(
-                    name,
-                    locals
-                );
+            if (!line) {
+                i++;
+                continue;
             }
 
-            return;
-        }
-
-
-        /*
-            Native definition
-        */
-
-        if (
-            type === "native"
-        ) {
-
-            if (definition.original) {
-
-                await this.executeNative(
-                    definition.original,
-                    values,
-                    locals
-                );
-            }
-
-            return;
-        }
-
-
-        /*
-            Generic native fallback.
-        */
-
-        if (definition.original) {
-
-            await this.executeNative(
-                definition.original,
-                values,
-                locals
-            );
-        }
-    }
-
-
-    /*
-        ----------------------------------------------------
-        STATEMENT EXECUTION
-        ----------------------------------------------------
-    */
-
-    async executeStatement(
-        statement,
-        locals = {}
-    ) {
-
-        /*
-            Block statement.
-        */
-
-        if (
-            statement.type === "block"
-        ) {
-
-            const matched =
-                this.findDefinition(
-                    statement.header +
-                    " { ... }"
-                ) ||
-                this.findDefinition(
-                    statement.header
-                );
 
             /*
-                Function/event/control definitions
-                normally need their header matched
-                independently of the body.
+                A line ending in {
+                starts a block.
             */
 
-            if (!matched) {
-
-                /*
-                    Try definitions whose template
-                    contains a block marker.
-                */
-
-                const definitions =
-                    this.getDefinitions()
-                        .filter(
-                            definition =>
-                                String(
-                                    definition.webly || ""
-                                ).includes("...")
-                        );
-
-                for (
-                    const definition of definitions
-                ) {
-
-                    const template =
-                        String(
-                            definition.webly
-                        )
-                        .replace(
-                            /\.\.\./g,
-                            ""
-                        )
-                        .trim();
-
-                    const result =
-                        this.matchDefinition(
-                            {
-                                ...definition,
-                                webly: template
-                            },
-                            statement.header
-                        );
-
-                    if (result) {
-
-                        await this.executeDefinition(
-                            result,
-                            statement,
-                            locals
-                        );
-
-                        return;
-                    }
-                }
-
-                /*
-                    Unknown block.
-                */
-
-                console.warn(
-                    "Unknown Webly block:",
-                    statement.header
-                );
-
-                return;
-            }
-
-            await this.executeDefinition(
-                matched,
-                statement,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            Normal line.
-        */
-
-        const text =
-            statement.value.trim();
-
-        if (!text) {
-            return;
-        }
-
-
-        /*
-            Function calls may be represented by
-            a call definition in syntax.json.
-        */
-
-        const matched =
-            this.findDefinition(text);
-
-        if (matched) {
-
-            await this.executeDefinition(
-                matched,
-                statement,
-                locals
-            );
-
-            return;
-        }
-
-
-        /*
-            Direct function call fallback.
-
-            This does not define the language syntax;
-            it simply allows a call definition to be
-            recognized if syntax.json does not include
-            a block marker.
-        */
-
-        const call =
-            text.match(
-                /^([A-Za-z_][A-Za-z0-9_]*)\s*\(\s*\)\s*$/
-            );
-
-        if (call) {
-
-            const name =
-                call[1];
-
             if (
-                this.functions[name]
+                line.endsWith("{")
             ) {
 
-                await this.callFunction(
-                    name,
-                    locals
-                );
+                const header =
+                    line.slice(
+                        0,
+                        -1
+                    ).trim();
 
-                return;
+
+                const body = [];
+
+                let depth = 1;
+
+                i++;
+
+
+                while (
+                    i < lines.length &&
+                    depth > 0
+                ) {
+
+                    const current =
+                        lines[i];
+
+                    const trimmed =
+                        current.trim();
+
+
+                    /*
+                        Count braces while respecting
+                        simple quoted strings.
+                    */
+
+                    const opens =
+                        this.countCharacter(
+                            current,
+                            "{"
+                        );
+
+                    const closes =
+                        this.countCharacter(
+                            current,
+                            "}"
+                        );
+
+
+                    if (
+                        depth === 1 &&
+                        trimmed === "}"
+                    ) {
+
+                        depth--;
+
+                        i++;
+
+                        break;
+                    }
+
+
+                    body.push(
+                        current
+                    );
+
+
+                    depth +=
+                        opens -
+                        closes;
+
+
+                    i++;
+                }
+
+
+                result.push({
+                    kind: "block",
+                    header,
+                    body: body.join("\n")
+                });
+
+                continue;
             }
+
+
+            result.push({
+                kind: "line",
+                line
+            });
+
+            i++;
         }
 
-
-        console.warn(
-            "Unknown Webly statement:",
-            text
-        );
+        return result;
     }
 
 
-    /*
-        ----------------------------------------------------
-        BLOCK EXECUTION
-        ----------------------------------------------------
-    */
+    countCharacter(
+        text,
+        character
+    ) {
+
+        let count = 0;
+
+        let quote = null;
+
+        for (
+            let i = 0;
+            i < text.length;
+            i++
+        ) {
+
+            const char =
+                text[i];
+
+            if (
+                quote
+            ) {
+
+                if (
+                    char === quote &&
+                    text[i - 1] !== "\\"
+                ) {
+                    quote = null;
+                }
+
+                continue;
+            }
+
+
+            if (
+                char === '"' ||
+                char === "'"
+            ) {
+
+                quote = char;
+
+                continue;
+            }
+
+
+            if (
+                char === character
+            ) {
+                count++;
+            }
+        }
+
+        return count;
+    }
+
+
+    /* ---------------------------------------------------------
+       BLOCK EXECUTION
+    --------------------------------------------------------- */
 
     async executeBlock(
         source,
         locals = {}
     ) {
 
-        const statements =
-            this.parseStatements(
+        const entries =
+            this.extractBlocks(
                 source
             );
 
+
         for (
-            const statement of statements
+            const entry
+            of entries
         ) {
 
-            if (!this.running) {
-                break;
+            if (
+                entry.kind === "block"
+            ) {
+
+                await this.executeBlockEntry(
+                    entry,
+                    locals
+                );
+
+            } else {
+
+                await this.executeLine(
+                    entry.line,
+                    locals
+                );
+            }
+        }
+    }
+
+
+    async executeBlockEntry(
+        entry,
+        locals
+    ) {
+
+        const header =
+            entry.header;
+
+
+        /*
+            FIRST: check function declarations.
+
+            This is important.
+
+            "function flash()" is a declaration,
+            while "flash()" is a call.
+
+            They must never be treated as the same thing.
+        */
+
+        const functionDefinition =
+            this.findDefinition(
+                header + " {"
+            );
+
+
+        if (
+            functionDefinition &&
+            functionDefinition.definition.type ===
+                "function"
+        ) {
+
+            this.registerFunction(
+                functionDefinition.values,
+                entry.body
+            );
+
+            return;
+        }
+
+
+        /*
+            Generic definition matching.
+        */
+
+        const matched =
+            this.findDefinition(
+                header + " {"
+            );
+
+
+        if (!matched) {
+
+            /*
+                Some syntax definitions may represent
+                their block without requiring the {.
+            */
+
+            const alternate =
+                this.findDefinition(
+                    header
+                );
+
+            if (
+                alternate
+            ) {
+
+                await this.executeMatchedDefinition(
+                    alternate,
+                    entry.body,
+                    locals
+                );
+
+                return;
             }
 
-            await this.executeStatement(
-                statement,
-                locals
+
+            throw new Error(
+                `Webly syntax not found: ${header}`
+            );
+        }
+
+
+        await this.executeMatchedDefinition(
+            matched,
+            entry.body,
+            locals
+        );
+    }
+
+
+    async executeMatchedDefinition(
+        matched,
+        body,
+        locals
+    ) {
+
+        const {
+            definition,
+            values
+        } = matched;
+
+
+        switch (
+            definition.type
+        ) {
+
+            case "function":
+
+                this.registerFunction(
+                    values,
+                    body
+                );
+
+                return;
+
+
+            case "event":
+
+                this.registerEvent(
+                    values,
+                    definition,
+                    body,
+                    locals
+                );
+
+                return;
+
+
+            case "control":
+
+                await this.executeControl(
+                    values,
+                    definition,
+                    body,
+                    locals
+                );
+
+                return;
+
+
+            case "loop":
+
+                await this.executeLoop(
+                    values,
+                    definition,
+                    body,
+                    locals
+                );
+
+                return;
+
+
+            default:
+
+                /*
+                    A block can also be represented
+                    by a native definition.
+                */
+
+                this.executeNative(
+                    values,
+                    definition,
+                    locals
+                );
+        }
+    }
+
+
+    /* ---------------------------------------------------------
+       LOOPS
+    --------------------------------------------------------- */
+
+    async executeLoop(
+        values,
+        definition,
+        body,
+        locals
+    ) {
+
+        /*
+            A repeat-forever definition can describe
+            the loop in syntax.json.
+
+            The runtime does not need the actual
+            Webly spelling of the loop.
+        */
+
+        if (
+            definition.repeat === "forever"
+        ) {
+
+            while (true) {
+
+                await this.executeBlock(
+                    body,
+                    locals
+                );
+
+                /*
+                    Yield to the browser so an infinite
+                    loop does not completely block rendering.
+                */
+
+                await new Promise(
+                    resolve =>
+                        setTimeout(
+                            resolve,
+                            0
+                        )
+                );
+            }
+        }
+    }
+
+
+    /* ---------------------------------------------------------
+       LINES
+    --------------------------------------------------------- */
+
+    async executeLine(
+        line,
+        locals = {}
+    ) {
+
+        line =
+            line.trim();
+
+
+        if (!line) {
+            return;
+        }
+
+
+        /*
+            Ignore standalone closing braces.
+        */
+
+        if (
+            line === "}"
+        ) {
+            return;
+        }
+
+
+        const matched =
+            this.findDefinition(
+                line
+            );
+
+
+        if (!matched) {
+
+            throw new Error(
+                `Webly syntax not found: ${line}`
+            );
+        }
+
+
+        await this.executeDefinition(
+            matched.definition,
+            matched.values,
+            locals
+        );
+    }
+
+
+    /* ---------------------------------------------------------
+       DEFINITION EXECUTION
+    --------------------------------------------------------- */
+
+    async executeDefinition(
+        definition,
+        values,
+        locals
+    ) {
+
+        switch (
+            definition.type
+        ) {
+
+            case "assignment":
+
+                this.executeAssignment(
+                    values,
+                    locals
+                );
+
+                return;
+
+
+            case "property":
+
+                this.executeProperty(
+                    values,
+                    definition,
+                    locals
+                );
+
+                return;
+
+
+            case "style":
+
+                this.executeStyle(
+                    values,
+                    definition,
+                    locals
+                );
+
+                return;
+
+
+            case "action":
+
+                this.executeAction(
+                    values,
+                    definition,
+                    locals
+                );
+
+                return;
+
+
+            case "element":
+
+                this.createElement(
+                    values,
+                    definition
+                );
+
+                return;
+
+
+            case "timing":
+
+                await this.executeTiming(
+                    values,
+                    definition,
+                    locals
+                );
+
+                return;
+
+
+            case "call":
+
+                await this.callFunction(
+                    values.name,
+                    locals
+                );
+
+                return;
+
+
+            case "native":
+
+                this.executeNative(
+                    values,
+                    definition,
+                    locals
+                );
+
+                return;
+
+
+            default:
+
+                /*
+                    Generic fallback.
+
+                    If syntax.json supplies a native
+                    implementation, it can still be run.
+                */
+
+                if (
+                    definition.original
+                ) {
+
+                    this.executeNative(
+                        values,
+                        definition,
+                        locals
+                    );
+
+                    return;
+                }
+
+
+                throw new Error(
+                    `Unsupported Webly definition type: ${definition.type}`
+                );
+        }
+    }
+
+
+    /* ---------------------------------------------------------
+       START
+    --------------------------------------------------------- */
+
+    async run(
+        source
+    ) {
+
+        if (this.running) {
+            return;
+        }
+
+        this.running = true;
+
+        try {
+
+            await this.executeBlock(
+                source,
+                {}
+            );
+
+        } catch (error) {
+
+            this.error(
+                error
             );
         }
     }
 
 
-    /*
-        ----------------------------------------------------
-        PROGRAM EXECUTION
-        ----------------------------------------------------
-    */
+    /* ---------------------------------------------------------
+       ERROR
+    --------------------------------------------------------- */
 
-    async run(source) {
+    error(error) {
 
-        const cleaned =
-            this.stripComments(
-                source
+        console.error(
+            "Webly Runtime Error",
+            error
+        );
+
+        const message =
+            document.createElement(
+                "pre"
             );
 
-        await this.executeBlock(
-            cleaned,
-            {}
+        message.textContent =
+            "Webly Runtime Error\n\n" +
+            error.message;
+
+        message.style.position =
+            "fixed";
+
+        message.style.left =
+            "10px";
+
+        message.style.right =
+            "10px";
+
+        message.style.bottom =
+            "10px";
+
+        message.style.padding =
+            "15px";
+
+        message.style.margin =
+            "0";
+
+        message.style.background =
+            "#181721";
+
+        message.style.color =
+            "#ffffff";
+
+        message.style.border =
+            "1px solid #444";
+
+        message.style.borderRadius =
+            "8px";
+
+        message.style.zIndex =
+            "999999";
+
+        document.body.appendChild(
+            message
         );
     }
 }
 
 
-/*
-    --------------------------------------------------------
-    LOADING
-    --------------------------------------------------------
-*/
+/* =============================================================
+   FILE LOADING
+============================================================= */
 
-async function loadJSON(url) {
+async function loadJSON(
+    path
+) {
 
     const response =
-        await fetch(url);
+        await fetch(path);
 
     if (!response.ok) {
 
         throw new Error(
-            "Could not load " + url +
-            " (" +
-            response.status +
-            ")"
+            `Could not load ${path}`
         );
     }
 
@@ -1911,18 +1760,17 @@ async function loadJSON(url) {
 }
 
 
-async function loadText(url) {
+async function loadText(
+    path
+) {
 
     const response =
-        await fetch(url);
+        await fetch(path);
 
     if (!response.ok) {
 
         throw new Error(
-            "Could not load " + url +
-            " (" +
-            response.status +
-            ")"
+            `Could not load ${path}`
         );
     }
 
@@ -1930,11 +1778,9 @@ async function loadText(url) {
 }
 
 
-/*
-    --------------------------------------------------------
-    START WEBLY
-    --------------------------------------------------------
-*/
+/* =============================================================
+   WEBLY STARTUP
+============================================================= */
 
 async function startWebly() {
 
@@ -1950,13 +1796,16 @@ async function startWebly() {
                 "main.webly"
             );
 
+
         const runtime =
             new WeblyRuntime(
                 syntax
             );
 
-        window.webly =
+
+        window.Webly =
             runtime;
+
 
         await runtime.run(
             source
@@ -1965,23 +1814,8 @@ async function startWebly() {
     } catch (error) {
 
         console.error(
-            "Webly Runtime Error:",
+            "Webly startup error:",
             error
-        );
-
-        document.body.innerHTML = "";
-
-        const errorElement =
-            document.createElement(
-                "pre"
-            );
-
-        errorElement.textContent =
-            "Webly Runtime Error\n\n" +
-            error.message;
-
-        document.body.appendChild(
-            errorElement
         );
     }
 }
