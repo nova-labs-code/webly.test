@@ -2,1027 +2,1198 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webly Runtime</title>
+
+    <meta
+        name="viewport"
+        content="width=device-width,
+        initial-scale=1.0,
+        maximum-scale=1.0,
+        user-scalable=no"
+    >
+
+    <title>Webly</title>
 </head>
 
 <body>
 
 <script>
+
+let syntax = null;
+let source = "";
+
 const elements = {};
-const functions = {};
 const variables = {};
+const functions = {};
+
+let definitions = [];
 
 
-/* =========================
-   PAGE
-========================= */
+/* =========================================
+   LOAD
+========================================= */
 
-const page = {
-    set background(value) {
-        document.body.style.background = value;
-    },
+async function load() {
 
-    get background() {
-        return document.body.style.background;
+    syntax = await fetch("syntax.json")
+        .then(response => {
+
+            if (!response.ok)
+                throw new Error("Could not load syntax.json");
+
+            return response.json();
+        });
+
+    source = await fetch("main.webly")
+        .then(response => {
+
+            if (!response.ok)
+                throw new Error("Could not load main.webly");
+
+            return response.text();
+        });
+
+    buildDefinitions(syntax.webly);
+
+    await execute(source);
+}
+
+
+/* =========================================
+   SYNTAX DISCOVERY
+========================================= */
+
+function buildDefinitions(node, path = []) {
+
+    if (!node || typeof node !== "object")
+        return;
+
+    if (
+        typeof node.webly === "string" &&
+        typeof node.original === "string"
+    ) {
+
+        definitions.push({
+            ...node,
+            path
+        });
     }
-};
+
+    for (const key of Object.keys(node)) {
+
+        if (
+            key === "webly" ||
+            key === "original"
+        ) {
+            continue;
+        }
+
+        buildDefinitions(
+            node[key],
+            [...path, key]
+        );
+    }
+}
 
 
-/* =========================
+/* =========================================
+   FIND SYNTAX
+========================================= */
+
+function findDefinition(
+    sourceLine,
+    category = null
+) {
+
+    const matches = definitions.filter(definition => {
+
+        if (
+            category &&
+            !definition.path.includes(category)
+        ) {
+            return false;
+        }
+
+        return matchesSyntax(
+            sourceLine,
+            definition.webly
+        );
+    });
+
+    return matches[0] || null;
+}
+
+
+/* =========================================
+   GENERIC SYNTAX MATCHER
+========================================= */
+
+function syntaxPattern(template) {
+
+    let pattern = template
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+    /*
+        Anything that represents an example
+        identifier/value becomes a capture.
+    */
+
+    pattern = pattern
+        .replace(
+            /myButton|myLabel|myInput|myText|myBox|myImage|myLink|myHeading/g,
+            "([A-Za-z_$][\\w$]*)"
+        )
+        .replace(
+            /score|name|age|loggedIn/g,
+            "([A-Za-z_$][\\w$]*)"
+        )
+        .replace(
+            /"[^"]*"/g,
+            '"([^"]*)"'
+        )
+        .replace(
+            /\.\.\./g,
+            "([\\s\\S]*?)"
+        );
+
+    return new RegExp(
+        "^" + pattern + "$"
+    );
+}
+
+
+function matchesSyntax(
+    line,
+    template
+) {
+
+    try {
+
+        return syntaxPattern(
+            template
+        ).test(line.trim());
+
+    } catch {
+
+        return false;
+    }
+}
+
+
+/* =========================================
+   EXTRACT VALUES
+========================================= */
+
+function extract(
+    line,
+    template
+) {
+
+    const pattern =
+        syntaxPattern(template);
+
+    const match =
+        line.trim().match(pattern);
+
+    if (!match)
+        return null;
+
+    return match.slice(1);
+}
+
+
+/* =========================================
    ELEMENT CREATION
-========================= */
+========================================= */
 
-function createElement(type, name) {
-    let element;
+function createFromDefinition(
+    definition,
+    values
+) {
 
-    switch (type) {
-        case "button":
-            element = document.createElement("button");
-            break;
+    const original =
+        definition.original;
 
-        case "label":
-            element = document.createElement("div");
-            break;
+    const tagMatch =
+        original.match(
+            /<([a-zA-Z][\w-]*)/
+        );
 
-        case "input":
-            element = document.createElement("input");
-            break;
+    if (!tagMatch)
+        return;
 
-        case "text":
-            element = document.createElement("span");
-            break;
+    const tag =
+        tagMatch[1];
 
-        case "box":
-            element = document.createElement("div");
-            break;
+    const name =
+        values.find(
+            value =>
+                /^[A-Za-z_$][\w$]*$/.test(value)
+        );
 
-        default:
-            element = document.createElement("div");
-    }
+    if (!name)
+        return;
 
-    element.dataset.weblyName = name;
+    const element =
+        document.createElement(tag);
 
-    document.body.appendChild(element);
+    element.id = name;
 
     elements[name] = element;
 
-    return element;
+    document.body.appendChild(element);
 }
 
 
-/* =========================
-   PROPERTY SYSTEM
-========================= */
+/* =========================================
+   ELEMENT LOOKUP
+========================================= */
 
-function setProperty(element, property, value) {
-    if (!element) return;
+function getElement(name) {
 
-    switch (property) {
-
-        case "text":
-            element.textContent = value;
-            break;
-
-        case "color":
-            element.style.color = value;
-            break;
-
-        case "background":
-            element.style.background = value;
-            break;
-
-        case "width":
-            element.style.width =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "height":
-            element.style.height =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "radius":
-            element.style.borderRadius =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "fontSize":
-            element.style.fontSize =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "padding":
-            element.style.padding =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "display":
-            element.style.display = value;
-            break;
-
-        case "direction":
-            element.style.flexDirection = value;
-            break;
-
-        case "align":
-            element.style.alignItems = value;
-            break;
-
-        case "justify":
-            element.style.justifyContent = value;
-            break;
-
-        case "gap":
-            element.style.gap =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "scale":
-            element.style.transform =
-                `scale(${value})`;
-            break;
-
-        case "hidden":
-            element.style.display =
-                value ? "none" : "";
-            break;
-
-        case "position":
-            element.style.position = value;
-            break;
-
-        case "top":
-            element.style.top =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "left":
-            element.style.left =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "right":
-            element.style.right =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        case "bottom":
-            element.style.bottom =
-                typeof value === "number"
-                    ? value + "px"
-                    : value;
-            break;
-
-        default:
-            element.style[property] = value;
-    }
+    return (
+        elements[name] ||
+        document.getElementById(name)
+    );
 }
 
 
-/* =========================
-   ACTIONS
-========================= */
+/* =========================================
+   ORIGINAL SYNTAX INTERPRETER
+========================================= */
 
-function runAction(element, action) {
-    if (!element) return;
-
-    switch (action) {
-
-        case "hide":
-            element.style.display = "none";
-            break;
-
-        case "show":
-            element.style.display = "";
-            break;
-
-        case "disable":
-            element.disabled = true;
-            break;
-
-        case "enable":
-            element.disabled = false;
-            break;
-    }
-}
-
-
-/* =========================
-   WAIT
-========================= */
-
-function wait(seconds) {
-    return new Promise(resolve => {
-        setTimeout(resolve, seconds * 1000);
-    });
-}
-
-
-/* =========================
-   VARIABLE LOOKUP
-========================= */
-
-function getVariable(name, localVariables = null) {
-
-    if (
-        localVariables &&
-        Object.prototype.hasOwnProperty.call(
-            localVariables,
-            name
-        )
-    ) {
-        return localVariables[name];
-    }
-
-    if (
-        Object.prototype.hasOwnProperty.call(
-            variables,
-            name
-        )
-    ) {
-        return variables[name];
-    }
-
-    return undefined;
-}
-
-
-/* =========================
-   VARIABLE SET
-========================= */
-
-function setVariable(
-    name,
-    value,
-    localVariables = null
+function applyOriginal(
+    definition,
+    values,
+    target
 ) {
 
-    if (localVariables) {
-        localVariables[name] = value;
-    } else {
-        variables[name] = value;
-    }
-}
+    const original =
+        definition.original;
+
+    const webly =
+        definition.webly;
 
 
-/* =========================
-   VALUE PARSER
-========================= */
+    /*
+        HTML DOM properties
+    */
 
-function parseValue(
-    value,
-    localElements = {},
-    localVariables = null
-) {
-
-    value = value.trim();
-
-
-    /* STRING */
-
-    if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-    ) {
-        return value.slice(1, -1);
-    }
-
-
-    /* BOOLEAN */
-
-    if (value === "true") return true;
-    if (value === "false") return false;
-
-
-    /* NUMBER */
-
-    if (value !== "" && !isNaN(Number(value))) {
-        return Number(value);
-    }
-
-
-    /* VARIABLE */
-
-    const variableValue =
-        getVariable(
-            value,
-            localVariables
+    const domProperty =
+        original.match(
+            /getElementById\([^)]*\)\.([A-Za-z_$][\w$]*)\s*=/
         );
 
-    if (variableValue !== undefined) {
-        return variableValue;
+    if (domProperty) {
+
+        const property =
+            domProperty[1];
+
+        const value =
+            values[values.length - 1];
+
+        target[property] =
+            value;
+
+        return;
     }
 
 
-    /* LOCAL ELEMENT */
+    /*
+        CSS properties
+    */
 
-    if (localElements[value]) {
-        return localElements[value];
+    const cssProperty =
+        original.match(
+            /\{\s*([A-Za-z-]+)\s*:/
+        );
+
+    if (cssProperty) {
+
+        const property =
+            cssProperty[1];
+
+        const value =
+            values[values.length - 1];
+
+        target.style[
+            cssPropertyToJS(property)
+        ] =
+            cssValue(
+                property,
+                value
+            );
+
+        return;
     }
 
 
-    /* GLOBAL ELEMENT */
+    /*
+        document.body.style
+    */
 
-    if (elements[value]) {
-        return elements[value];
+    const pageStyle =
+        original.match(
+            /document\.body\.style\.([A-Za-z_$][\w$]*)/
+        );
+
+    if (pageStyle) {
+
+        document.body.style[
+            pageStyle[1]
+        ] =
+            cssValue(
+                pageStyle[1],
+                values[values.length - 1]
+            );
+
+        return;
     }
 
+
+    /*
+        document.title
+    */
+
+    if (
+        original.includes(
+            "document.title"
+        )
+    ) {
+
+        document.title =
+            values[values.length - 1];
+
+        return;
+    }
+}
+
+
+/* =========================================
+   CSS
+========================================= */
+
+function cssPropertyToJS(property) {
+
+    return property.replace(
+        /-([a-z])/g,
+        (_, letter) =>
+            letter.toUpperCase()
+    );
+}
+
+
+function cssValue(
+    property,
+    value
+) {
+
+    if (
+        typeof value === "number"
+    ) {
+        return value;
+    }
+
+    const numeric =
+        Number(value);
+
+    if (
+        !Number.isNaN(numeric)
+    ) {
+
+        const units = [
+            "width",
+            "height",
+            "radius",
+            "fontSize",
+            "padding",
+            "margin",
+            "gap",
+            "top",
+            "left",
+            "right",
+            "bottom"
+        ];
+
+        if (
+            units.some(
+                unit =>
+                    property
+                        .toLowerCase()
+                        .includes(unit.toLowerCase())
+            )
+        ) {
+
+            return numeric + "px";
+        }
+    }
 
     return value;
 }
 
 
-/* =========================
-   EXECUTE LINE
-========================= */
+/* =========================================
+   EVENTS
+========================================= */
 
-async function executeLine(
-    line,
-    localElements = {},
-    localVariables = null
+function createEvent(
+    definition,
+    values,
+    body
 ) {
 
-    line = line.trim();
+    const name =
+        values[0];
 
-    if (!line) return;
+    const element =
+        getElement(name);
 
+    if (!element)
+        return;
 
-    /* =========================
-       WAIT
-    ========================= */
-
-    const waitMatch = line.match(
-        /^wait\s*\(\s*(.*?)\s*\)$/
-    );
-
-    if (waitMatch) {
-
-        const seconds = Number(
-            parseValue(
-                waitMatch[1],
-                localElements,
-                localVariables
-            )
+    const match =
+        definition.original.match(
+            /addEventListener\(["']([^"']+)["']/
         );
 
-        await wait(seconds);
-
+    if (!match)
         return;
-    }
 
+    element.addEventListener(
+        match[1],
+        async () => {
 
-    /* =========================
-       PAGE BACKGROUND
-    ========================= */
-
-    const pageMatch = line.match(
-        /^page\.(background)\s*=\s*(.+)$/
-    );
-
-    if (pageMatch) {
-
-        const property = pageMatch[1];
-
-        const value = parseValue(
-            pageMatch[2],
-            localElements,
-            localVariables
-        );
-
-        page[property] = value;
-
-        return;
-    }
-
-
-    /* =========================
-       ELEMENT CREATE
-    ========================= */
-
-    const createMatch = line.match(
-        /^(\w+)\.create\(["'](.+)["']\)$/
-    );
-
-    if (createMatch) {
-
-        const type = createMatch[1];
-        const name = createMatch[2];
-
-        createElement(type, name);
-
-        return;
-    }
-
-
-    /* =========================
-       ELEMENT ACTION
-    ========================= */
-
-    const actionMatch = line.match(
-        /^(\w+)\.(hide|show|disable|enable)$/
-    );
-
-    if (actionMatch) {
-
-        const name = actionMatch[1];
-        const action = actionMatch[2];
-
-        const element =
-            localElements[name] ||
-            elements[name];
-
-        runAction(element, action);
-
-        return;
-    }
-
-
-    /* =========================
-       ELEMENT +=
-    ========================= */
-
-    const elementAddMatch = line.match(
-        /^(\w+)\.(\w+)\s*\+=\s*(.+)$/
-    );
-
-    if (elementAddMatch) {
-
-        const name = elementAddMatch[1];
-        const property = elementAddMatch[2];
-
-        const value = parseValue(
-            elementAddMatch[3],
-            localElements,
-            localVariables
-        );
-
-        const element =
-            localElements[name] ||
-            elements[name];
-
-        if (!element) return;
-
-        if (property === "text") {
-
-            element.textContent += value;
-
-        } else {
-
-            const current =
-                Number(
-                    element[property] || 0
-                );
-
-            setProperty(
-                element,
-                property,
-                current + Number(value)
-            );
+            await execute(body);
         }
-
-        return;
-    }
-
-
-    /* =========================
-       ELEMENT -=
-    ========================= */
-
-    const elementSubtractMatch = line.match(
-        /^(\w+)\.(\w+)\s*-\=\s*(.+)$/
     );
-
-    if (elementSubtractMatch) {
-
-        const name = elementSubtractMatch[1];
-        const property = elementSubtractMatch[2];
-
-        const value = parseValue(
-            elementSubtractMatch[3],
-            localElements,
-            localVariables
-        );
-
-        const element =
-            localElements[name] ||
-            elements[name];
-
-        if (!element) return;
-
-        const current =
-            Number(
-                element[property] || 0
-            );
-
-        setProperty(
-            element,
-            property,
-            current - Number(value)
-        );
-
-        return;
-    }
-
-
-    /* =========================
-       ELEMENT PROPERTY =
-    ========================= */
-
-    const elementAssignmentMatch = line.match(
-        /^(\w+)\.(\w+)\s*=\s*(.+)$/
-    );
-
-    if (elementAssignmentMatch) {
-
-        const name = elementAssignmentMatch[1];
-        const property = elementAssignmentMatch[2];
-
-        const element =
-            localElements[name] ||
-            elements[name];
-
-        if (!element) return;
-
-        const value = parseValue(
-            elementAssignmentMatch[3],
-            localElements,
-            localVariables
-        );
-
-        setProperty(
-            element,
-            property,
-            value
-        );
-
-        return;
-    }
-
-
-    /* =========================
-       VARIABLE MATH
-    ========================= */
-
-    const variableMathMatch = line.match(
-        /^(\w+)\s*(\+=|-=|\*=|\/=)\s*(.+)$/
-    );
-
-    if (variableMathMatch) {
-
-        const name = variableMathMatch[1];
-        const operator = variableMathMatch[2];
-
-        const value = parseValue(
-            variableMathMatch[3],
-            localElements,
-            localVariables
-        );
-
-        let current =
-            getVariable(
-                name,
-                localVariables
-            );
-
-        if (current === undefined) {
-            current = 0;
-        }
-
-        switch (operator) {
-
-            case "+=":
-                current += value;
-                break;
-
-            case "-=":
-                current -= value;
-                break;
-
-            case "*=":
-                current *= value;
-                break;
-
-            case "/=":
-                current /= value;
-                break;
-        }
-
-        setVariable(
-            name,
-            current,
-            localVariables
-        );
-
-        return;
-    }
-
-
-    /* =========================
-       VARIABLE =
-    ========================= */
-
-    const variableMatch = line.match(
-        /^(\w+)\s*=\s*(.+)$/
-    );
-
-    if (variableMatch) {
-
-        const name = variableMatch[1];
-
-        const value = parseValue(
-            variableMatch[2],
-            localElements,
-            localVariables
-        );
-
-        setVariable(
-            name,
-            value,
-            localVariables
-        );
-
-        return;
-    }
 }
 
 
-/* =========================
-   EXECUTE BLOCK
-========================= */
+/* =========================================
+   ACTIONS
+========================================= */
 
-async function executeBlock(
-    body,
-    localElements = {},
-    localVariables = null
+function executeAction(
+    definition,
+    name
 ) {
 
-    const lines =
-        body
-            .split("\n")
-            .map(line => line.trim())
-            .filter(line => line);
+    const element =
+        getElement(name);
 
-    for (const line of lines) {
+    if (!element)
+        return;
 
-        await executeLine(
-            line,
-            localElements,
-            localVariables
-        );
-    }
-}
+    const original =
+        definition.original;
 
 
-/* =========================
-   REPEAT FOREVER
-========================= */
-
-async function executeForever(
-    body,
-    localElements = {},
-    localVariables = null
-) {
-
-    while (true) {
-
-        await executeBlock(
-            body,
-            localElements,
-            localVariables
-        );
-    }
-}
-
-
-/* =========================
-   FUNCTION BODY
-========================= */
-
-async function executeFunctionBody(
-    body,
-    localElements,
-    localVariables
-) {
-
-    const lines = body.split("\n");
-
-    let i = 0;
-
-    while (i < lines.length) {
-
-        const line = lines[i].trim();
-
-        if (!line) {
-            i++;
-            continue;
-        }
-
-
-        /* =========================
-           REPEAT FOREVER
-        ========================= */
-
-        if (
-            line === "repeat forever {" ||
-            line === "repeat forever{"
-        ) {
-
-            let depth = 1;
-            const block = [];
-
-            i++;
-
-            while (
-                i < lines.length &&
-                depth > 0
-            ) {
-
-                const current =
-                    lines[i].trim();
-
-                if (
-                    current.endsWith("{")
-                ) {
-                    depth++;
-                }
-
-                if (current === "}") {
-
-                    depth--;
-
-                    if (depth === 0) {
-                        break;
-                    }
-                }
-
-                if (depth > 0) {
-                    block.push(lines[i]);
-                }
-
-                i++;
-            }
-
-            executeForever(
-                block.join("\n"),
-                localElements,
-                localVariables
-            );
-
-            i++;
-
-            continue;
-        }
-
-
-        await executeLine(
-            line,
-            localElements,
-            localVariables
+    const display =
+        original.match(
+            /\.style\.display\s*=\s*["']([^"']*)["']/
         );
 
-        i++;
+    if (display) {
+
+        element.style.display =
+            display[1];
+
+        return;
     }
-}
 
 
-/* =========================
-   FUNCTION CALL
-========================= */
+    const disabled =
+        original.match(
+            /\.disabled\s*=\s*(true|false)/
+        );
 
-async function callFunction(name, args) {
+    if (disabled) {
 
-    const fn = functions[name];
+        element.disabled =
+            disabled[1] === "true";
 
-    if (!fn) return;
-
-    const localElements = {};
-    const localVariables = {};
+        return;
+    }
 
 
-    for (
-        let i = 0;
-        i < fn.params.length;
-        i++
+    const method =
+        original.match(
+            /\.([A-Za-z_$][\w$]*)\(\)/
+        );
+
+    if (
+        method &&
+        typeof element[method[1]] === "function"
     ) {
 
-        const parameter =
-            fn.params[i];
+        element[method[1]]();
+    }
+}
 
-        const argument =
-            args[i];
+
+/* =========================================
+   VALUES
+========================================= */
+
+function valueOf(value) {
+
+    value = value.trim();
+
+    if (
+        (
+            value.startsWith('"') &&
+            value.endsWith('"')
+        ) ||
+        (
+            value.startsWith("'") &&
+            value.endsWith("'")
+        )
+    ) {
+
+        return value.slice(1, -1);
+    }
+
+    if (value === "true")
+        return true;
+
+    if (value === "false")
+        return false;
+
+    if (value === "null")
+        return null;
+
+    if (
+        value !== "" &&
+        !Number.isNaN(Number(value))
+    ) {
+
+        return Number(value);
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            variables,
+            value
+        )
+    ) {
+
+        return variables[value];
+    }
+
+    return value;
+}
+
+
+/* =========================================
+   BLOCK PARSER
+========================================= */
+
+function splitStatements(code) {
+
+    const result = [];
+
+    let current = "";
+    let depth = 0;
+
+    for (
+        const line of code.split("\n")
+    ) {
+
+        const trimmed =
+            line.trim();
+
+        if (!trimmed)
+            continue;
 
         if (
-            argument &&
-            elements[argument]
+            trimmed.startsWith("//")
+        )
+            continue;
+
+        current +=
+            (current ? "\n" : "") +
+            line;
+
+        for (
+            const character of line
         ) {
 
-            localElements[parameter] =
-                elements[argument];
+            if (character === "{")
+                depth++;
+
+            if (character === "}")
+                depth--;
+        }
+
+        if (depth === 0) {
+
+            result.push(
+                current.trim()
+            );
+
+            current = "";
+        }
+    }
+
+    if (current.trim())
+        result.push(current.trim());
+
+    return result;
+}
+
+
+function blockOf(statement) {
+
+    const start =
+        statement.indexOf("{");
+
+    const end =
+        statement.lastIndexOf("}");
+
+    if (
+        start === -1 ||
+        end === -1
+    )
+        return null;
+
+    return {
+        header:
+            statement
+                .slice(0, start)
+                .trim(),
+
+        body:
+            statement
+                .slice(start + 1, end)
+                .trim()
+    };
+}
+
+
+/* =========================================
+   EXECUTE
+========================================= */
+
+async function execute(code) {
+
+    for (
+        const statement
+        of splitStatements(code)
+    ) {
+
+        const block =
+            blockOf(statement);
+
+        if (block) {
+
+            await executeBlock(block);
 
         } else {
 
-            localVariables[parameter] =
-                parseValue(
-                    argument || "",
-                    {},
-                    null
+            await executeLine(statement);
+        }
+    }
+}
+
+
+/* =========================================
+   BLOCK EXECUTION
+========================================= */
+
+async function executeBlock(block) {
+
+    const header =
+        block.header;
+
+
+    /*
+        Functions are discovered
+        generically from the language.
+    */
+
+    const functionMatch =
+        header.match(
+            /^function\s+([A-Za-z_$][\w$]*)\s*\(\s*\)$/
+        );
+
+    if (functionMatch) {
+
+        functions[
+            functionMatch[1]
+        ] = block.body;
+
+        return;
+    }
+
+
+    /*
+        Anything matching a syntax
+        definition can become an event.
+    */
+
+    const definition =
+        findDefinition(header);
+
+    if (definition) {
+
+        const values =
+            extract(
+                header,
+                definition.webly
+            );
+
+        if (
+            definition.path.includes(
+                "events"
+            )
+        ) {
+
+            createEvent(
+                definition,
+                values,
+                block.body
+            );
+
+            return;
+        }
+    }
+
+
+    /*
+        Control syntax
+    */
+
+    if (
+        header.startsWith("if ")
+    ) {
+
+        const expression =
+            header.slice(3).trim();
+
+        if (
+            evaluate(expression)
+        ) {
+
+            await execute(
+                block.body
+            );
+        }
+
+        return;
+    }
+
+
+    if (
+        header.startsWith("repeat ")
+    ) {
+
+        const amount =
+            header
+                .slice(7)
+                .trim();
+
+        if (
+            amount === "forever"
+        ) {
+
+            while (true) {
+
+                await execute(
+                    block.body
                 );
-        }
-    }
 
-
-    await executeFunctionBody(
-        fn.body,
-        localElements,
-        localVariables
-    );
-}
-
-
-/* =========================
-   WEBLY PARSER
-========================= */
-
-async function runWebly(code) {
-
-    const lines = code.split("\n");
-
-    let i = 0;
-
-    while (i < lines.length) {
-
-        const line = lines[i].trim();
-
-        if (!line) {
-            i++;
-            continue;
-        }
-
-
-        /* =========================
-           FUNCTION
-        ========================= */
-
-        const functionMatch =
-            line.match(
-                /^function\s+(\w+)\s*\((.*?)\)\s*\{$/
-            );
-
-        if (functionMatch) {
-
-            const name =
-                functionMatch[1];
-
-            const params =
-                functionMatch[2]
-                    .split(",")
-                    .map(x => x.trim())
-                    .filter(Boolean);
-
-            let depth = 1;
-            const body = [];
-
-            i++;
-
-            while (
-                i < lines.length &&
-                depth > 0
-            ) {
-
-                const current =
-                    lines[i].trim();
-
-                if (
-                    current.endsWith("{")
-                ) {
-                    depth++;
-                }
-
-                if (current === "}") {
-
-                    depth--;
-
-                    if (depth === 0) {
-                        break;
-                    }
-                }
-
-                if (depth > 0) {
-                    body.push(lines[i]);
-                }
-
-                i++;
+                await new Promise(
+                    requestAnimationFrame
+                );
             }
+        }
 
-            functions[name] = {
-                params,
-                body: body.join("\n")
-            };
+        const count =
+            Number(
+                valueOf(amount)
+            );
 
-            i++;
+        for (
+            let i = 0;
+            i < count;
+            i++
+        ) {
 
-            continue;
+            await execute(
+                block.body
+            );
+        }
+    }
+}
+
+
+/* =========================================
+   LINE EXECUTION
+========================================= */
+
+async function executeLine(line) {
+
+    /*
+        Syntax definitions are checked first.
+    */
+
+    const definition =
+        findDefinition(line);
+
+    if (definition) {
+
+        const values =
+            extract(
+                line,
+                definition.webly
+            );
+
+
+        if (
+            definition.path.includes(
+                "elements"
+            ) &&
+            definition.path.includes(
+                "create"
+            )
+        ) {
+
+            createFromDefinition(
+                definition,
+                values
+            );
+
+            return;
         }
 
 
-        /* =========================
-           FUNCTION CALL
-        ========================= */
-
-        const callMatch =
-            line.match(
-                /^(\w+)\s*\((.*?)\)$/
-            );
-
-        if (callMatch) {
+        if (
+            definition.path.includes(
+                "properties"
+            )
+        ) {
 
             const name =
-                callMatch[1];
+                values[0];
 
-            const args =
-                callMatch[2]
-                    .split(",")
-                    .map(x => x.trim())
-                    .filter(Boolean);
+            const target =
+                name === "page"
+                    ? document.body
+                    : getElement(name);
 
-            await callFunction(
-                name,
-                args
+            if (!target)
+                return;
+
+            applyOriginal(
+                definition,
+                values,
+                target
             );
 
-            i++;
-
-            continue;
+            return;
         }
 
 
-        /* =========================
-           NORMAL LINE
-        ========================= */
+        if (
+            definition.path.includes(
+                "actions"
+            )
+        ) {
 
-        await executeLine(
-            line,
-            {},
-            null
+            executeAction(
+                definition,
+                values[0]
+            );
+
+            return;
+        }
+
+
+        if (
+            definition.path.includes(
+                "timing"
+            )
+        ) {
+
+            const seconds =
+                Number(
+                    values[0]
+                );
+
+            await new Promise(
+                resolve =>
+                    setTimeout(
+                        resolve,
+                        seconds * 1000
+                    )
+            );
+
+            return;
+        }
+
+
+        if (
+            definition.path.includes(
+                "navigation"
+            )
+        ) {
+
+            executeNavigation(
+                definition,
+                values
+            );
+
+            return;
+        }
+
+
+        if (
+            definition.path.includes(
+                "console"
+            )
+        ) {
+
+            executeConsole(
+                definition,
+                values
+            );
+
+            return;
+        }
+    }
+
+
+    /*
+        Variable assignment.
+    */
+
+    const assignment =
+        line.match(
+            /^([A-Za-z_$][\w$]*)\s*(=|\+=|-=|\*=|\/=)\s*(.+)$/
         );
 
-        i++;
+    if (assignment) {
+
+        const name =
+            assignment[1];
+
+        const operator =
+            assignment[2];
+
+        const value =
+            valueOf(
+                assignment[3]
+            );
+
+        if (
+            operator === "="
+        ) {
+
+            variables[name] =
+                value;
+
+            return;
+        }
+
+        const old =
+            variables[name] ?? 0;
+
+        if (
+            operator === "+="
+        )
+            variables[name] =
+                old + value;
+
+        if (
+            operator === "-="
+        )
+            variables[name] =
+                old - value;
+
+        if (
+            operator === "*="
+        )
+            variables[name] =
+                old * value;
+
+        if (
+            operator === "/="
+        )
+            variables[name] =
+                old / value;
+
+        return;
+    }
+
+
+    /*
+        Function call.
+    */
+
+    const call =
+        line.match(
+            /^([A-Za-z_$][\w$]*)\(\)$/
+        );
+
+    if (call) {
+
+        const name =
+            call[1];
+
+        if (
+            functions[name]
+        ) {
+
+            await execute(
+                functions[name]
+            );
+        }
     }
 }
 
 
-/* =========================
-   LOAD MAIN.WEBLY
-========================= */
+/* =========================================
+   NAVIGATION
+========================================= */
 
-async function loadWebly() {
+function executeNavigation(
+    definition,
+    values
+) {
 
-    try {
+    const original =
+        definition.original;
 
-        const response =
-            await fetch("main.webly");
+    if (
+        original.includes(
+            "window.location.href"
+        )
+    ) {
 
-        if (!response.ok) {
-            throw new Error(
-                "Could not load main.webly"
-            );
-        }
+        window.location.href =
+            values[0];
 
-        const code =
-            await response.text();
+        return;
+    }
 
-        await runWebly(code);
+    if (
+        original.includes(
+            "window.location.reload"
+        )
+    ) {
 
-    } catch (error) {
+        window.location.reload();
 
-        console.error(
-            "Webly runtime error:",
-            error
-        );
+        return;
+    }
+
+    if (
+        original.includes(
+            "window.history.back"
+        )
+    ) {
+
+        window.history.back();
     }
 }
 
 
-loadWebly();
+/* =========================================
+   CONSOLE
+========================================= */
+
+function executeConsole(
+    definition,
+    values
+) {
+
+    const original =
+        definition.original;
+
+    const value =
+        values[0];
+
+    if (
+        original.includes(
+            "console.error"
+        )
+    ) {
+
+        console.error(value);
+
+    } else {
+
+        console.log(value);
+    }
+}
+
+
+/* =========================================
+   EXPRESSIONS
+========================================= */
+
+function evaluate(expression) {
+
+    const match =
+        expression.match(
+            /^(.+?)\s*(===|!==|==|!=|>=|<=|>|<)\s*(.+)$/
+        );
+
+    if (!match)
+        return Boolean(
+            valueOf(expression)
+        );
+
+    const left =
+        valueOf(match[1]);
+
+    const right =
+        valueOf(match[3]);
+
+
+    switch (match[2]) {
+
+        case "===":
+            return left === right;
+
+        case "!==":
+            return left !== right;
+
+        case "==":
+            return left == right;
+
+        case "!=":
+            return left != right;
+
+        case ">":
+            return left > right;
+
+        case "<":
+            return left < right;
+
+        case ">=":
+            return left >= right;
+
+        case "<=":
+            return left <= right;
+    }
+
+    return false;
+}
+
+
+/* =========================================
+   START
+========================================= */
+
+load().catch(error => {
+
+    console.error(
+        "Webly Runtime Error:",
+        error
+    );
+
+});
+
 </script>
 
 </body>
