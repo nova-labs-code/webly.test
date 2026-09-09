@@ -12,11 +12,22 @@ colorButton.color = "white"
 function flash(button) {
     repeat forever {
         button.color = "red"
+        wait(0.02)
+
         button.color = "orange"
+        wait(0.02)
+
         button.color = "yellow"
+        wait(0.02)
+
         button.color = "green"
+        wait(0.02)
+
         button.color = "blue"
+        wait(0.02)
+
         button.color = "purple"
+        wait(0.02)
     }
 }
 
