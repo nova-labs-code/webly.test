@@ -11,6 +11,7 @@
 <script>
 const elements = {};
 const functions = {};
+const variables = {};
 
 
 /* =========================
@@ -240,9 +241,16 @@ function wait(seconds) {
    VALUE PARSER
 ========================= */
 
-function parseValue(value, localElements = {}) {
+function parseValue(
+    value,
+    localElements = {},
+    localVariables = {}
+) {
 
     value = value.trim();
+
+
+    /* STRING */
 
     if (
         (value.startsWith('"') && value.endsWith('"')) ||
@@ -251,22 +259,108 @@ function parseValue(value, localElements = {}) {
         return value.slice(1, -1);
     }
 
+
+    /* BOOLEAN */
+
     if (value === "true") return true;
     if (value === "false") return false;
 
-    if (!isNaN(Number(value))) {
+
+    /* NUMBER */
+
+    if (value !== "" && !isNaN(Number(value))) {
         return Number(value);
     }
+
+
+    /* LOCAL VARIABLE */
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            localVariables,
+            value
+        )
+    ) {
+        return localVariables[value];
+    }
+
+
+    /* GLOBAL VARIABLE */
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            variables,
+            value
+        )
+    ) {
+        return variables[value];
+    }
+
+
+    /* LOCAL ELEMENT */
 
     if (localElements[value]) {
         return localElements[value];
     }
 
+
+    /* GLOBAL ELEMENT */
+
     if (elements[value]) {
         return elements[value];
     }
 
+
     return value;
+}
+
+
+/* =========================
+   VARIABLE ASSIGNMENT
+========================= */
+
+function setVariable(
+    name,
+    value,
+    localVariables = null
+) {
+
+    if (localVariables) {
+        localVariables[name] = value;
+    } else {
+        variables[name] = value;
+    }
+}
+
+
+/* =========================
+   GET VARIABLE
+========================= */
+
+function getVariable(
+    name,
+    localVariables = {}
+) {
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            localVariables,
+            name
+        )
+    ) {
+        return localVariables[name];
+    }
+
+    if (
+        Object.prototype.hasOwnProperty.call(
+            variables,
+            name
+        )
+    ) {
+        return variables[name];
+    }
+
+    return undefined;
 }
 
 
@@ -274,14 +368,20 @@ function parseValue(value, localElements = {}) {
    EXECUTE LINE
 ========================= */
 
-async function executeLine(line, localElements = {}) {
+async function executeLine(
+    line,
+    localElements = {},
+    localVariables = {}
+) {
 
     line = line.trim();
 
     if (!line) return;
 
 
-    /* wait(seconds) */
+    /* =========================
+       WAIT
+    ========================= */
 
     const waitMatch = line.match(
         /^wait\s*\(\s*(.*?)\s*\)$/
@@ -292,7 +392,8 @@ async function executeLine(line, localElements = {}) {
         const seconds = Number(
             parseValue(
                 waitMatch[1],
-                localElements
+                localElements,
+                localVariables
             )
         );
 
@@ -302,7 +403,9 @@ async function executeLine(line, localElements = {}) {
     }
 
 
-    /* page.background = value */
+    /* =========================
+       PAGE PROPERTY
+    ========================= */
 
     const pageMatch = line.match(
         /^page\.(background)\s*=\s*(.+)$/
@@ -314,7 +417,8 @@ async function executeLine(line, localElements = {}) {
 
         const value = parseValue(
             pageMatch[2],
-            localElements
+            localElements,
+            localVariables
         );
 
         page[property] = value;
@@ -323,7 +427,9 @@ async function executeLine(line, localElements = {}) {
     }
 
 
-    /* element.create("name") */
+    /* =========================
+       ELEMENT CREATE
+    ========================= */
 
     const createMatch = line.match(
         /^(\w+)\.create\(["'](.+)["']\)$/
@@ -340,7 +446,9 @@ async function executeLine(line, localElements = {}) {
     }
 
 
-    /* element.action */
+    /* =========================
+       ELEMENT ACTION
+    ========================= */
 
     const actionMatch = line.match(
         /^(\w+)\.(hide|show|disable|enable)$/
@@ -361,7 +469,9 @@ async function executeLine(line, localElements = {}) {
     }
 
 
-    /* element.property += value */
+    /* =========================
+       ELEMENT +=
+    ========================= */
 
     const addMatch = line.match(
         /^(\w+)\.(\w+)\s*\+=\s*(.+)$/
@@ -374,7 +484,8 @@ async function executeLine(line, localElements = {}) {
 
         const value = parseValue(
             addMatch[3],
-            localElements
+            localElements,
+            localVariables
         );
 
         const element =
@@ -403,7 +514,9 @@ async function executeLine(line, localElements = {}) {
     }
 
 
-    /* element.property = value */
+    /* =========================
+       ELEMENT PROPERTY =
+    ========================= */
 
     const assignmentMatch = line.match(
         /^(\w+)\.(\w+)\s*=\s*(.+)$/
@@ -422,13 +535,99 @@ async function executeLine(line, localElements = {}) {
 
         const value = parseValue(
             assignmentMatch[3],
-            localElements
+            localElements,
+            localVariables
         );
 
         setProperty(
             element,
             property,
             value
+        );
+
+        return;
+    }
+
+
+    /* =========================
+       VARIABLE +=
+    ========================= */
+
+    const variableMathMatch = line.match(
+        /^(\w+)\s*(\+=|-=|\*=|\/=)\s*(.+)$/
+    );
+
+    if (variableMathMatch) {
+
+        const name = variableMathMatch[1];
+        const operator = variableMathMatch[2];
+
+        const value = parseValue(
+            variableMathMatch[3],
+            localElements,
+            localVariables
+        );
+
+        let current = getVariable(
+            name,
+            localVariables
+        );
+
+        if (current === undefined) {
+            current = 0;
+        }
+
+        switch (operator) {
+
+            case "+=":
+                current += value;
+                break;
+
+            case "-=":
+                current -= value;
+                break;
+
+            case "*=":
+                current *= value;
+                break;
+
+            case "/=":
+                current /= value;
+                break;
+        }
+
+        setVariable(
+            name,
+            current,
+            localVariables
+        );
+
+        return;
+    }
+
+
+    /* =========================
+       VARIABLE =
+    ========================= */
+
+    const variableMatch = line.match(
+        /^(\w+)\s*=\s*(.+)$/
+    );
+
+    if (variableMatch) {
+
+        const name = variableMatch[1];
+
+        const value = parseValue(
+            variableMatch[2],
+            localElements,
+            localVariables
+        );
+
+        setVariable(
+            name,
+            value,
+            localVariables
         );
 
         return;
@@ -442,7 +641,8 @@ async function executeLine(line, localElements = {}) {
 
 async function executeBlock(
     body,
-    localElements = {}
+    localElements = {},
+    localVariables = {}
 ) {
 
     const lines =
@@ -455,7 +655,8 @@ async function executeBlock(
 
         await executeLine(
             line,
-            localElements
+            localElements,
+            localVariables
         );
     }
 }
@@ -467,14 +668,16 @@ async function executeBlock(
 
 async function executeForever(
     body,
-    localElements = {}
+    localElements = {},
+    localVariables = {}
 ) {
 
     while (true) {
 
         await executeBlock(
             body,
-            localElements
+            localElements,
+            localVariables
         );
     }
 }
@@ -486,7 +689,8 @@ async function executeForever(
 
 async function executeFunctionBody(
     body,
-    localElements
+    localElements,
+    localVariables
 ) {
 
     const lines = body.split("\n");
@@ -503,7 +707,7 @@ async function executeFunctionBody(
         }
 
 
-        /* repeat forever */
+        /* REPEAT FOREVER */
 
         if (
             line === "repeat forever {" ||
@@ -547,7 +751,8 @@ async function executeFunctionBody(
 
             executeForever(
                 block.join("\n"),
-                localElements
+                localElements,
+                localVariables
             );
 
             i++;
@@ -558,7 +763,8 @@ async function executeFunctionBody(
 
         await executeLine(
             line,
-            localElements
+            localElements,
+            localVariables
         );
 
         i++;
@@ -577,6 +783,8 @@ async function callFunction(name, args) {
     if (!fn) return;
 
     const localElements = {};
+    const localVariables = {};
+
 
     for (
         let i = 0;
@@ -590,14 +798,30 @@ async function callFunction(name, args) {
         const argument =
             args[i];
 
-        localElements[parameter] =
-            elements[argument] ||
-            argument;
+        const value =
+            parseValue(
+                argument,
+                {},
+                variables
+            );
+
+        if (elements[argument]) {
+
+            localElements[parameter] =
+                elements[argument];
+
+        } else {
+
+            localVariables[parameter] =
+                value;
+        }
     }
+
 
     await executeFunctionBody(
         fn.body,
-        localElements
+        localElements,
+        localVariables
     );
 }
 
@@ -622,7 +846,9 @@ async function runWebly(code) {
         }
 
 
-        /* FUNCTION */
+        /* =========================
+           FUNCTION
+        ========================= */
 
         const functionMatch =
             line.match(
@@ -686,7 +912,9 @@ async function runWebly(code) {
         }
 
 
-        /* FUNCTION CALL */
+        /* =========================
+           FUNCTION CALL
+        ========================= */
 
         const callMatch =
             line.match(
@@ -715,9 +943,15 @@ async function runWebly(code) {
         }
 
 
-        /* NORMAL LINE */
+        /* =========================
+           NORMAL LINE
+        ========================= */
 
-        await executeLine(line);
+        await executeLine(
+            line,
+            {},
+            {}
+        );
 
         i++;
     }
