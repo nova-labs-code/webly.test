@@ -2,427 +2,558 @@
   "webly": {
     "name": "Webly",
     "version": "1.0",
-
     "description": "Webly syntax mapped to native HTML, CSS, and JavaScript.",
 
     "page": {
-      "description": "Built-in representation of the current web page.",
-
       "properties": {
         "background": {
-          "webly": "page.background = \"red\"",
-          "original": "document.body.style.background = \"red\";"
+          "type": "property",
+          "target": "page",
+          "webly": "{target}.background = {value}",
+          "original": "document.body.style.background = {value};"
         },
-
         "color": {
-          "webly": "page.color = \"white\"",
-          "original": "document.body.style.color = \"white\";"
+          "type": "property",
+          "target": "page",
+          "webly": "{target}.color = {value}",
+          "original": "document.body.style.color = {value};"
         },
-
         "title": {
-          "webly": "page.title = \"My Website\"",
-          "original": "document.title = \"My Website\";"
+          "type": "property",
+          "target": "page",
+          "webly": "{target}.title = {value}",
+          "original": "document.title = {value};"
         },
-
         "width": {
-          "webly": "page.width = 100",
-          "original": "document.body.style.width = \"100px\";"
+          "type": "property",
+          "target": "page",
+          "webly": "{target}.width = {value}",
+          "original": "document.body.style.width = {value};"
         },
-
         "height": {
-          "webly": "page.height = 100",
-          "original": "document.body.style.height = \"100px\";"
+          "type": "property",
+          "target": "page",
+          "webly": "{target}.height = {value}",
+          "original": "document.body.style.height = {value};"
         }
       }
     },
 
     "html": {
-      "description": "Webly abstractions for HTML.",
-
       "elements": {
-
         "button": {
           "create": {
-            "webly": "button.create(\"myButton\")",
-            "original": "<button id=\"myButton\"></button>"
+            "type": "element",
+            "tag": "button",
+            "webly": "{type}.create({name})",
+            "original": "<button id={name}></button>"
           }
         },
 
         "label": {
           "create": {
-            "webly": "label.create(\"myLabel\")",
-            "original": "<label id=\"myLabel\"></label>"
+            "type": "element",
+            "tag": "label",
+            "webly": "{type}.create({name})",
+            "original": "<label id={name}></label>"
           }
         },
 
         "input": {
           "create": {
-            "webly": "input.create(\"myInput\")",
-            "original": "<input id=\"myInput\">"
+            "type": "element",
+            "tag": "input",
+            "webly": "{type}.create({name})",
+            "original": "<input id={name}>"
           }
         },
 
         "text": {
           "create": {
-            "webly": "text.create(\"myText\")",
-            "original": "<span id=\"myText\"></span>"
+            "type": "element",
+            "tag": "span",
+            "webly": "{type}.create({name})",
+            "original": "<span id={name}></span>"
           }
         },
 
         "box": {
           "create": {
-            "webly": "box.create(\"myBox\")",
-            "original": "<div id=\"myBox\"></div>"
+            "type": "element",
+            "tag": "div",
+            "webly": "{type}.create({name})",
+            "original": "<div id={name}></div>"
           }
         },
 
         "image": {
           "create": {
-            "webly": "image.create(\"myImage\")",
-            "original": "<img id=\"myImage\">"
+            "type": "element",
+            "tag": "img",
+            "webly": "{type}.create({name})",
+            "original": "<img id={name}>"
           }
         },
 
         "link": {
           "create": {
-            "webly": "link.create(\"myLink\")",
-            "original": "<a id=\"myLink\"></a>"
+            "type": "element",
+            "tag": "a",
+            "webly": "{type}.create({name})",
+            "original": "<a id={name}></a>"
           }
         },
 
         "heading": {
           "create": {
-            "webly": "heading.create(\"myHeading\")",
-            "original": "<h1 id=\"myHeading\"></h1>"
+            "type": "element",
+            "tag": "h1",
+            "webly": "{type}.create({name})",
+            "original": "<h1 id={name}></h1>"
           }
         }
       },
 
       "properties": {
-
         "text": {
-          "webly": "myButton.text = \"Hello\"",
-          "original": "document.getElementById(\"myButton\").textContent = \"Hello\";"
+          "type": "property",
+          "webly": "{element}.text = {value}",
+          "original": "document.getElementById({element}).textContent = {value};"
         },
 
         "html": {
-          "webly": "myButton.html = \"<b>Hello</b>\"",
-          "original": "document.getElementById(\"myButton\").innerHTML = \"<b>Hello</b>\";"
+          "type": "property",
+          "webly": "{element}.html = {value}",
+          "original": "document.getElementById({element}).innerHTML = {value};"
         },
 
         "value": {
-          "webly": "myInput.value = \"Hello\"",
-          "original": "document.getElementById(\"myInput\").value = \"Hello\";"
+          "type": "property",
+          "webly": "{element}.value = {value}",
+          "original": "document.getElementById({element}).value = {value};"
         },
 
         "src": {
-          "webly": "myImage.src = \"image.png\"",
-          "original": "document.getElementById(\"myImage\").src = \"image.png\";"
+          "type": "property",
+          "webly": "{element}.src = {value}",
+          "original": "document.getElementById({element}).src = {value};"
         },
 
         "href": {
-          "webly": "myLink.href = \"https://example.com\"",
-          "original": "document.getElementById(\"myLink\").href = \"https://example.com\";"
+          "type": "property",
+          "webly": "{element}.href = {value}",
+          "original": "document.getElementById({element}).href = {value};"
         }
       }
     },
 
     "css": {
-      "description": "Webly abstractions for CSS.",
-
       "properties": {
-
         "color": {
-          "webly": "myButton.color = \"blue\"",
-          "original": "#myButton { color: blue; }"
+          "type": "style",
+          "property": "color",
+          "webly": "{element}.color = {value}",
+          "original": "#{element} { color: {value}; }"
         },
 
         "background": {
-          "webly": "myButton.background = \"black\"",
-          "original": "#myButton { background: black; }"
+          "type": "style",
+          "property": "background",
+          "webly": "{element}.background = {value}",
+          "original": "#{element} { background: {value}; }"
         },
 
         "width": {
-          "webly": "myButton.width = 200",
-          "original": "#myButton { width: 200px; }"
+          "type": "style",
+          "property": "width",
+          "unit": "px",
+          "webly": "{element}.width = {value}",
+          "original": "#{element} { width: {value}px; }"
         },
 
         "height": {
-          "webly": "myButton.height = 50",
-          "original": "#myButton { height: 50px; }"
+          "type": "style",
+          "property": "height",
+          "unit": "px",
+          "webly": "{element}.height = {value}",
+          "original": "#{element} { height: {value}px; }"
         },
 
         "radius": {
-          "webly": "myButton.radius = 10",
-          "original": "#myButton { border-radius: 10px; }"
+          "type": "style",
+          "property": "borderRadius",
+          "unit": "px",
+          "webly": "{element}.radius = {value}",
+          "original": "#{element} { border-radius: {value}px; }"
         },
 
         "fontSize": {
-          "webly": "myButton.fontSize = 20",
-          "original": "#myButton { font-size: 20px; }"
+          "type": "style",
+          "property": "fontSize",
+          "unit": "px",
+          "webly": "{element}.fontSize = {value}",
+          "original": "#{element} { font-size: {value}px; }"
         },
 
         "padding": {
-          "webly": "myButton.padding = 10",
-          "original": "#myButton { padding: 10px; }"
+          "type": "style",
+          "property": "padding",
+          "unit": "px",
+          "webly": "{element}.padding = {value}",
+          "original": "#{element} { padding: {value}px; }"
         },
 
         "margin": {
-          "webly": "myButton.margin = 10",
-          "original": "#myButton { margin: 10px; }"
+          "type": "style",
+          "property": "margin",
+          "unit": "px",
+          "webly": "{element}.margin = {value}",
+          "original": "#{element} { margin: {value}px; }"
         },
 
         "display": {
-          "webly": "myButton.display = \"flex\"",
-          "original": "#myButton { display: flex; }"
+          "type": "style",
+          "property": "display",
+          "webly": "{element}.display = {value}",
+          "original": "#{element} { display: {value}; }"
         },
 
         "direction": {
-          "webly": "myButton.direction = \"row\"",
-          "original": "#myButton { flex-direction: row; }"
+          "type": "style",
+          "property": "flexDirection",
+          "webly": "{element}.direction = {value}",
+          "original": "#{element} { flex-direction: {value}; }"
         },
 
         "align": {
-          "webly": "myButton.align = \"center\"",
-          "original": "#myButton { align-items: center; }"
+          "type": "style",
+          "property": "alignItems",
+          "webly": "{element}.align = {value}",
+          "original": "#{element} { align-items: {value}; }"
         },
 
         "justify": {
-          "webly": "myButton.justify = \"center\"",
-          "original": "#myButton { justify-content: center; }"
+          "type": "style",
+          "property": "justifyContent",
+          "webly": "{element}.justify = {value}",
+          "original": "#{element} { justify-content: {value}; }"
         },
 
         "gap": {
-          "webly": "myButton.gap = 20",
-          "original": "#myButton { gap: 20px; }"
+          "type": "style",
+          "property": "gap",
+          "unit": "px",
+          "webly": "{element}.gap = {value}",
+          "original": "#{element} { gap: {value}px; }"
         },
 
         "position": {
-          "webly": "myButton.position = \"absolute\"",
-          "original": "#myButton { position: absolute; }"
+          "type": "style",
+          "property": "position",
+          "webly": "{element}.position = {value}",
+          "original": "#{element} { position: {value}; }"
         },
 
         "top": {
-          "webly": "myButton.top = 20",
-          "original": "#myButton { top: 20px; }"
+          "type": "style",
+          "property": "top",
+          "unit": "px",
+          "webly": "{element}.top = {value}",
+          "original": "#{element} { top: {value}px; }"
         },
 
         "left": {
-          "webly": "myButton.left = 20",
-          "original": "#myButton { left: 20px; }"
+          "type": "style",
+          "property": "left",
+          "unit": "px",
+          "webly": "{element}.left = {value}",
+          "original": "#{element} { left: {value}px; }"
         },
 
         "right": {
-          "webly": "myButton.right = 20",
-          "original": "#myButton { right: 20px; }"
+          "type": "style",
+          "property": "right",
+          "unit": "px",
+          "webly": "{element}.right = {value}",
+          "original": "#{element} { right: {value}px; }"
         },
 
         "bottom": {
-          "webly": "myButton.bottom = 20",
-          "original": "#myButton { bottom: 20px; }"
+          "type": "style",
+          "property": "bottom",
+          "unit": "px",
+          "webly": "{element}.bottom = {value}",
+          "original": "#{element} { bottom: {value}px; }"
         },
 
         "opacity": {
-          "webly": "myButton.opacity = 0.5",
-          "original": "#myButton { opacity: 0.5; }"
+          "type": "style",
+          "property": "opacity",
+          "webly": "{element}.opacity = {value}",
+          "original": "#{element} { opacity: {value}; }"
         },
 
         "scale": {
-          "webly": "myButton.scale = 1.5",
-          "original": "#myButton { transform: scale(1.5); }"
+          "type": "style",
+          "property": "transform",
+          "transform": "scale",
+          "webly": "{element}.scale = {value}",
+          "original": "#{element} { transform: scale({value}); }"
         },
 
         "hidden": {
-          "webly": "myButton.hidden = true",
-          "original": "#myButton { display: none; }"
+          "type": "style",
+          "property": "display",
+          "hiddenValue": "none",
+          "visibleValue": "",
+          "webly": "{element}.hidden = {value}",
+          "original": "#{element} { display: {value}; }"
         }
       }
     },
 
     "javascript": {
-      "description": "Webly abstractions for JavaScript behavior.",
-
       "events": {
-
         "clicked": {
-          "webly": "myButton.clicked { ... }",
-          "original": "document.getElementById(\"myButton\").addEventListener(\"click\", () => { ... });"
+          "type": "event",
+          "event": "click",
+          "webly": "{element}.clicked { ... }",
+          "original": "document.getElementById({element}).addEventListener(\"click\", async () => { ... });"
         },
 
         "hovered": {
-          "webly": "myButton.hovered { ... }",
-          "original": "document.getElementById(\"myButton\").addEventListener(\"mouseenter\", () => { ... });"
+          "type": "event",
+          "event": "mouseenter",
+          "webly": "{element}.hovered { ... }",
+          "original": "document.getElementById({element}).addEventListener(\"mouseenter\", async () => { ... });"
         },
 
         "pressed": {
-          "webly": "myButton.pressed { ... }",
-          "original": "document.getElementById(\"myButton\").addEventListener(\"mousedown\", () => { ... });"
+          "type": "event",
+          "event": "mousedown",
+          "webly": "{element}.pressed { ... }",
+          "original": "document.getElementById({element}).addEventListener(\"mousedown\", async () => { ... });"
         },
 
         "released": {
-          "webly": "myButton.released { ... }",
-          "original": "document.getElementById(\"myButton\").addEventListener(\"mouseup\", () => { ... });"
+          "type": "event",
+          "event": "mouseup",
+          "webly": "{element}.released { ... }",
+          "original": "document.getElementById({element}).addEventListener(\"mouseup\", async () => { ... });"
         },
 
         "changed": {
-          "webly": "myInput.changed { ... }",
-          "original": "document.getElementById(\"myInput\").addEventListener(\"change\", () => { ... });"
+          "type": "event",
+          "event": "change",
+          "webly": "{element}.changed { ... }",
+          "original": "document.getElementById({element}).addEventListener(\"change\", async () => { ... });"
         },
 
         "focused": {
-          "webly": "myInput.focused { ... }",
-          "original": "document.getElementById(\"myInput\").addEventListener(\"focus\", () => { ... });"
+          "type": "event",
+          "event": "focus",
+          "webly": "{element}.focused { ... }",
+          "original": "document.getElementById({element}).addEventListener(\"focus\", async () => { ... });"
         },
 
         "blurred": {
-          "webly": "myInput.blurred { ... }",
-          "original": "document.getElementById(\"myInput\").addEventListener(\"blur\", () => { ... });"
+          "type": "event",
+          "event": "blur",
+          "webly": "{element}.blurred { ... }",
+          "original": "document.getElementById({element}).addEventListener(\"blur\", async () => { ... });"
         }
       },
 
       "actions": {
-
         "hide": {
-          "webly": "myButton.hide",
-          "original": "document.getElementById(\"myButton\").style.display = \"none\";"
+          "type": "action",
+          "action": "style.display",
+          "value": "none",
+          "webly": "{element}.hide",
+          "original": "document.getElementById({element}).style.display = \"none\";"
         },
 
         "show": {
-          "webly": "myButton.show",
-          "original": "document.getElementById(\"myButton\").style.display = \"\";"
+          "type": "action",
+          "action": "style.display",
+          "value": "",
+          "webly": "{element}.show",
+          "original": "document.getElementById({element}).style.display = \"\";"
         },
 
         "disable": {
-          "webly": "myButton.disable",
-          "original": "document.getElementById(\"myButton\").disabled = true;"
+          "type": "action",
+          "action": "disabled",
+          "value": true,
+          "webly": "{element}.disable",
+          "original": "document.getElementById({element}).disabled = true;"
         },
 
         "enable": {
-          "webly": "myButton.enable",
-          "original": "document.getElementById(\"myButton\").disabled = false;"
+          "type": "action",
+          "action": "disabled",
+          "value": false,
+          "webly": "{element}.enable",
+          "original": "document.getElementById({element}).disabled = false;"
         },
 
         "focus": {
-          "webly": "myInput.focus",
-          "original": "document.getElementById(\"myInput\").focus();"
+          "type": "action",
+          "action": "focus",
+          "webly": "{element}.focus",
+          "original": "document.getElementById({element}).focus();"
         },
 
         "blur": {
-          "webly": "myInput.blur",
-          "original": "document.getElementById(\"myInput\").blur();"
+          "type": "action",
+          "action": "blur",
+          "webly": "{element}.blur",
+          "original": "document.getElementById({element}).blur();"
         }
       },
 
       "variables": {
-
         "assignment": {
-          "webly": "score = 100",
-          "original": "let score = 100;"
+          "type": "assignment",
+          "operator": "=",
+          "webly": "{name} = {value}",
+          "original": "let {name} = {value};"
         },
 
         "addition": {
-          "webly": "score += 1",
-          "original": "score += 1;"
+          "type": "assignment",
+          "operator": "+=",
+          "webly": "{name} += {value}",
+          "original": "{name} += {value};"
         },
 
         "subtraction": {
-          "webly": "score -= 1",
-          "original": "score -= 1;"
+          "type": "assignment",
+          "operator": "-=",
+          "webly": "{name} -= {value}",
+          "original": "{name} -= {value};"
         },
 
         "multiplication": {
-          "webly": "score *= 2",
-          "original": "score *= 2;"
+          "type": "assignment",
+          "operator": "*=",
+          "webly": "{name} *= {value}",
+          "original": "{name} *= {value};"
         },
 
         "division": {
-          "webly": "score /= 2",
-          "original": "score /= 2;"
+          "type": "assignment",
+          "operator": "/=",
+          "webly": "{name} /= {value}",
+          "original": "{name} /= {value};"
         }
       },
 
       "functions": {
-
         "definition": {
-          "webly": "function greet() {\n    ...\n}",
-          "original": "function greet() {\n    ...\n}"
+          "type": "function",
+          "webly": "function {name}() { ... }",
+          "original": "function {name}() { ... }"
         },
 
         "call": {
-          "webly": "greet()",
-          "original": "greet();"
+          "type": "call",
+          "webly": "{name}()",
+          "original": "{name}();"
         }
       },
 
       "control": {
-
         "if": {
-          "webly": "if score > 10 {\n    ...\n}",
-          "original": "if (score > 10) {\n    ...\n}"
+          "type": "control",
+          "control": "if",
+          "webly": "if {condition} { ... }",
+          "original": "if ({condition}) { ... }"
         },
 
         "else": {
-          "webly": "else {\n    ...\n}",
-          "original": "else {\n    ...\n}"
+          "type": "control",
+          "control": "else",
+          "webly": "else { ... }",
+          "original": "else { ... }"
         },
 
         "elseIf": {
-          "webly": "else if score > 5 {\n    ...\n}",
-          "original": "else if (score > 5) {\n    ...\n}"
+          "type": "control",
+          "control": "elseIf",
+          "webly": "else if {condition} { ... }",
+          "original": "else if ({condition}) { ... }"
         },
 
         "while": {
-          "webly": "while score < 10 {\n    ...\n}",
-          "original": "while (score < 10) {\n    ...\n}"
+          "type": "control",
+          "control": "while",
+          "webly": "while {condition} { ... }",
+          "original": "while ({condition}) { ... }"
         },
 
         "repeat": {
-          "webly": "repeat 10 {\n    ...\n}",
-          "original": "for (let i = 0; i < 10; i++) {\n    ...\n}"
+          "type": "control",
+          "control": "repeat",
+          "webly": "repeat {amount} { ... }",
+          "original": "for (let i = 0; i < {amount}; i++) { ... }"
+        },
+
+        "forever": {
+          "type": "control",
+          "control": "forever",
+          "webly": "repeat forever { ... }",
+          "original": "while (true) { ... }"
         }
       },
 
       "timing": {
-
         "wait": {
-          "webly": "wait(1)",
-          "original": "await new Promise(resolve => setTimeout(resolve, 1000));"
+          "type": "timing",
+          "timing": "wait",
+          "webly": "wait({seconds})",
+          "original": "await new Promise(resolve => setTimeout(resolve, {milliseconds}));"
         },
 
         "timeout": {
-          "webly": "after 1 {\n    ...\n}",
-          "original": "setTimeout(() => {\n    ...\n}, 1000);"
+          "type": "timing",
+          "timing": "timeout",
+          "webly": "after {seconds} { ... }",
+          "original": "setTimeout(async () => { ... }, {milliseconds});"
         }
       }
     },
 
     "web": {
       "console": {
-
         "log": {
-          "webly": "console.log(\"Hello\")",
-          "original": "console.log(\"Hello\");"
+          "type": "native",
+          "webly": "console.log({value})",
+          "original": "console.log({value});"
         },
 
         "error": {
-          "webly": "console.error(\"Error\")",
-          "original": "console.error(\"Error\");"
+          "type": "native",
+          "webly": "console.error({value})",
+          "original": "console.error({value});"
         }
       },
 
       "navigation": {
-
         "go": {
-          "webly": "page.go(\"/about\")",
-          "original": "window.location.href = \"/about\";"
+          "type": "native",
+          "webly": "page.go({url})",
+          "original": "window.location.href = {url};"
         },
 
         "reload": {
+          "type": "native",
           "webly": "page.reload",
           "original": "window.location.reload();"
         },
 
         "back": {
+          "type": "native",
           "webly": "page.back",
           "original": "window.history.back();"
         }
