@@ -2,22 +2,22 @@ wait = 1
 function flash() {
     repeat forever {
         page.background = "red"
-        waity(wait)
+        wait(wait)
 
         page.background = "orange"
-        waity(wait)
+        wait(wait)
 
         page.background = "yellow"
-        waity(wait)
+        wait(wait)
 
         page.background = "green"
-        waity(wait)
+        wait(wait)
 
         page.background = "blue"
-        waity(wait)
+        wait(wait)
 
         page.background = "purple"
-        waity(wait)
+        wait(wait)
     }
 }
 
