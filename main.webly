@@ -1,35 +1,23 @@
-button.create("colorButton")
-
-colorButton.text = "FLASH"
-colorButton.width = 200
-colorButton.height = 60
-colorButton.radius = 12
-colorButton.fontSize = 20
-colorButton.background = "#222233"
-colorButton.color = "white"
-
-
-function flash(button) {
+function flash() {
     repeat forever {
-        button.color = "red"
+        page.background = "red"
         wait(0.02)
 
-        button.color = "orange"
+        page.background = "orange"
         wait(0.02)
 
-        button.color = "yellow"
+        page.background = "yellow"
         wait(0.02)
 
-        button.color = "green"
+        page.background = "green"
         wait(0.02)
 
-        button.color = "blue"
+        page.background = "blue"
         wait(0.02)
 
-        button.color = "purple"
+        page.background = "purple"
         wait(0.02)
     }
 }
 
-
-flash(colorButton)
+flash()
