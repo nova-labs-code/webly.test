@@ -3,61 +3,31 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Webly</title>
+
+    <title>Webly Runtime</title>
 </head>
 
 <body>
 
-<div id="webly-root"></div>
-
 <script>
-const root = document.getElementById("webly-root");
-
 const elements = {};
 const functions = {};
 
 
-// ========================================
-// VALUE PARSER
-// ========================================
-
-function parseValue(value) {
-    value = value.trim();
-
-    if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-    ) {
-        return value.slice(1, -1);
-    }
-
-    if (value === "true") return true;
-    if (value === "false") return false;
-
-    if (!isNaN(value)) {
-        return Number(value);
-    }
-
-    return value;
-}
-
-
-// ========================================
-// CREATE ELEMENT
-// ========================================
+/* =========================
+   ELEMENT CREATION
+========================= */
 
 function createElement(type, name) {
-
     let element;
 
-    switch (type.toLowerCase()) {
-
+    switch (type) {
         case "button":
             element = document.createElement("button");
             break;
 
         case "label":
-            element = document.createElement("label");
+            element = document.createElement("div");
             break;
 
         case "input":
@@ -73,47 +43,28 @@ function createElement(type, name) {
             break;
 
         default:
-            element = document.createElement(type);
-            break;
+            element = document.createElement("div");
     }
 
     element.dataset.weblyName = name;
 
-    elements[name] = element;
+    document.body.appendChild(element);
 
-    root.appendChild(element);
+    elements[name] = element;
 
     return element;
 }
 
 
-// ========================================
-// GET ELEMENT
-// ========================================
+/* =========================
+   PROPERTY SYSTEM
+========================= */
 
-function getElement(name, localElements = {}) {
-
-    if (localElements[name]) {
-        return localElements[name];
-    }
-
-    return elements[name];
-}
-
-
-// ========================================
-// SET PROPERTY
-// ========================================
-
-function setProperty(name, property, value, localElements = {}) {
-
-    const element = getElement(name, localElements);
+function setProperty(element, property, value) {
 
     if (!element) return;
 
-    value = parseValue(value);
-
-    switch (property.toLowerCase()) {
+    switch (property) {
 
         case "text":
             element.textContent = value;
@@ -124,8 +75,7 @@ function setProperty(name, property, value, localElements = {}) {
             break;
 
         case "background":
-        case "backgroundcolor":
-            element.style.backgroundColor = value;
+            element.style.background = value;
             break;
 
         case "width":
@@ -149,7 +99,7 @@ function setProperty(name, property, value, localElements = {}) {
                     : value;
             break;
 
-        case "fontsize":
+        case "fontSize":
             element.style.fontSize =
                 typeof value === "number"
                     ? value + "px"
@@ -227,21 +177,22 @@ function setProperty(name, property, value, localElements = {}) {
                     ? value + "px"
                     : value;
             break;
+
+        default:
+            element.style[property] = value;
     }
 }
 
 
-// ========================================
-// COMMANDS
-// ========================================
+/* =========================
+   ACTIONS
+========================= */
 
-function runCommand(name, command, localElements = {}) {
-
-    const element = getElement(name, localElements);
+function runAction(element, action) {
 
     if (!element) return;
 
-    switch (command) {
+    switch (action) {
 
         case "hide":
             element.style.display = "none";
@@ -262,261 +213,204 @@ function runCommand(name, command, localElements = {}) {
 }
 
 
-// ========================================
-// EVENTS
-// ========================================
+/* =========================
+   WAIT
+========================= */
 
-function attachEvent(name, event, body) {
-
-    const element = elements[name];
-
-    if (!element) return;
-
-    let eventName;
-
-    switch (event) {
-
-        case "clicked":
-            eventName = "click";
-            break;
-
-        case "hovered":
-            eventName = "mouseenter";
-            break;
-
-        case "pressed":
-            eventName = "mousedown";
-            break;
-
-        case "released":
-            eventName = "mouseup";
-            break;
-
-        default:
-            eventName = event;
-            break;
-    }
-
-    element.addEventListener(eventName, () => {
-
-        executeBlock(body);
-
+function wait(seconds) {
+    return new Promise(resolve => {
+        setTimeout(resolve, seconds * 1000);
     });
 }
 
 
-// ========================================
-// FUNCTION DEFINITION
-// ========================================
+/* =========================
+   VALUE PARSER
+========================= */
 
-function defineFunction(name, parameters, body) {
+function parseValue(value, localElements = {}) {
 
-    functions[name] = {
-        parameters,
-        body
-    };
-}
+    value = value.trim();
 
-
-// ========================================
-// FUNCTION CALL
-// ========================================
-
-function callFunction(name, argumentsList) {
-
-    const fn = functions[name];
-
-    if (!fn) return;
-
-    const localElements = {};
-
-    for (let i = 0; i < fn.parameters.length; i++) {
-
-        const parameter = fn.parameters[i];
-        const argument = argumentsList[i];
-
-        if (elements[argument]) {
-
-            localElements[parameter] =
-                elements[argument];
-
-        }
+    if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+    ) {
+        return value.slice(1, -1);
     }
 
-    executeBlock(
-        fn.body,
-        localElements
-    );
-}
+    if (value === "true") return true;
+    if (value === "false") return false;
 
-
-// ========================================
-// REPEAT FOREVER
-// ========================================
-
-function executeForever(body, localElements = {}) {
-
-    async function loop() {
-
-        while (true) {
-
-            await executeBlock(
-                body,
-                localElements
-            );
-
-            await new Promise(resolve => {
-                setTimeout(resolve, 300);
-            });
-        }
+    if (!isNaN(Number(value))) {
+        return Number(value);
     }
 
-    loop();
-}
-
-
-// ========================================
-// FIND BLOCK
-// ========================================
-
-function collectBlock(lines, startIndex) {
-
-    const body = [];
-
-    let depth = 1;
-
-    let i = startIndex + 1;
-
-    while (i < lines.length && depth > 0) {
-
-        if (lines[i].endsWith("{")) {
-            depth++;
-        }
-
-        if (lines[i] === "}") {
-            depth--;
-        }
-
-        if (depth > 0) {
-            body.push(lines[i]);
-        }
-
-        i++;
+    if (localElements[value]) {
+        return localElements[value];
     }
 
-    return {
-        body: body.join("\n"),
-        nextIndex: i
-    };
+    if (elements[value]) {
+        return elements[value];
+    }
+
+    return value;
 }
 
 
-// ========================================
-// EXECUTE LINE
-// ========================================
+/* =========================
+   EXECUTE LINE
+========================= */
 
-async function executeLine(
-    line,
-    localElements = {}
-) {
+async function executeLine(line, localElements = {}) {
 
     line = line.trim();
 
     if (!line) return;
 
+    /* wait(seconds) */
 
-    // ====================================
-    // PROPERTY
-    // ====================================
+    const waitMatch = line.match(
+        /^wait\s*\(\s*(.*?)\s*\)$/
+    );
 
-    const propertyMatch =
-        line.match(
-            /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.+)$/
+    if (waitMatch) {
+
+        const seconds = Number(
+            parseValue(
+                waitMatch[1],
+                localElements
+            )
         );
 
-    if (propertyMatch) {
+        await wait(seconds);
 
-        const name = propertyMatch[1];
+        return;
+    }
 
-        const property =
-            propertyMatch[2];
+
+    /* element.create("name") */
+
+    const createMatch = line.match(
+        /^(\w+)\.create\(["'](.+)["']\)$/
+    );
+
+    if (createMatch) {
+
+        const type = createMatch[1];
+        const name = createMatch[2];
+
+        createElement(type, name);
+
+        return;
+    }
+
+
+    /* element.action */
+
+    const actionMatch = line.match(
+        /^(\w+)\.(hide|show|disable|enable)$/
+    );
+
+    if (actionMatch) {
+
+        const name = actionMatch[1];
+        const action = actionMatch[2];
+
+        const element =
+            localElements[name] ||
+            elements[name];
+
+        runAction(element, action);
+
+        return;
+    }
+
+
+    /* element.property = value */
+
+    const assignmentMatch = line.match(
+        /^(\w+)\.(\w+)\s*=\s*(.+)$/
+    );
+
+    if (assignmentMatch) {
+
+        const name = assignmentMatch[1];
+        const property = assignmentMatch[2];
+        const rawValue = assignmentMatch[3];
+
+        const element =
+            localElements[name] ||
+            elements[name];
+
+        if (!element) return;
 
         const value =
-            propertyMatch[3];
+            parseValue(
+                rawValue,
+                localElements
+            );
 
         setProperty(
-            name,
+            element,
             property,
-            value,
-            localElements
+            value
         );
 
         return;
     }
 
 
-    // ====================================
-    // COMMAND
-    // ====================================
+    /* element.property += value */
 
-    const commandMatch =
-        line.match(
-            /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)$/
-        );
+    const addMatch = line.match(
+        /^(\w+)\.(\w+)\s*\+=\s*(.+)$/
+    );
 
-    if (commandMatch) {
+    if (addMatch) {
 
-        const name =
-            commandMatch[1];
+        const name = addMatch[1];
+        const property = addMatch[2];
+        const rawValue = addMatch[3];
 
-        const command =
-            commandMatch[2];
+        const element =
+            localElements[name] ||
+            elements[name];
 
-        runCommand(
-            name,
-            command,
-            localElements
-        );
+        if (!element) return;
+
+        const value =
+            parseValue(
+                rawValue,
+                localElements
+            );
+
+        if (property === "text") {
+
+            element.textContent += value;
+
+        } else {
+
+            const current =
+                Number(
+                    element[property] || 0
+                );
+
+            setProperty(
+                element,
+                property,
+                current + Number(value)
+            );
+        }
 
         return;
-    }
-
-
-    // ====================================
-    // FUNCTION CALL
-    // ====================================
-
-    const callMatch =
-        line.match(
-            /^([A-Za-z_][A-Za-z0-9_]*)\((.*?)\)$/
-        );
-
-    if (callMatch) {
-
-        const functionName =
-            callMatch[1];
-
-        const argsText =
-            callMatch[2].trim();
-
-        const args =
-            argsText
-                ? argsText
-                    .split(",")
-                    .map(x => x.trim())
-                : [];
-
-        callFunction(
-            functionName,
-            args
-        );
     }
 }
 
 
-// ========================================
-// EXECUTE BLOCK
-// ========================================
+/* =========================
+   FUNCTION BODY EXECUTION
+========================= */
 
 async function executeBlock(
     body,
@@ -529,38 +423,7 @@ async function executeBlock(
             .map(line => line.trim())
             .filter(line => line);
 
-
-    for (let i = 0; i < lines.length; i++) {
-
-        const line = lines[i];
-
-
-        // =================================
-        // REPEAT FOREVER
-        // =================================
-
-        if (line === "repeat forever {") {
-
-            const result =
-                collectBlock(
-                    lines,
-                    i
-                );
-
-            executeForever(
-                result.body,
-                localElements
-            );
-
-            i = result.nextIndex - 1;
-
-            continue;
-        }
-
-
-        // =================================
-        // NORMAL LINE
-        // =================================
+    for (const line of lines) {
 
         await executeLine(
             line,
@@ -570,31 +433,182 @@ async function executeBlock(
 }
 
 
-// ========================================
-// PARSE WEBLY
-// ========================================
+/* =========================
+   REPEAT FOREVER
+========================= */
 
-function parseWebly(source) {
+async function executeForever(
+    body,
+    localElements = {}
+) {
+
+    while (true) {
+
+        await executeBlock(
+            body,
+            localElements
+        );
+    }
+}
+
+
+/* =========================
+   FUNCTION CALL
+========================= */
+
+async function callFunction(
+    name,
+    args
+) {
+
+    const fn = functions[name];
+
+    if (!fn) return;
+
+    const localElements = {};
+
+    for (
+        let i = 0;
+        i < fn.params.length;
+        i++
+    ) {
+
+        const parameter =
+            fn.params[i];
+
+        const argument =
+            args[i];
+
+        localElements[parameter] =
+            elements[argument] ||
+            argument;
+    }
+
+    await executeFunctionBody(
+        fn.body,
+        localElements
+    );
+}
+
+
+/* =========================
+   FUNCTION BODY PARSER
+========================= */
+
+async function executeFunctionBody(
+    body,
+    localElements
+) {
 
     const lines =
-        source
-            .split("\n")
-            .map(line => line.trim())
-            .filter(line => line);
+        body.split("\n");
+
+    let i = 0;
+
+    while (i < lines.length) {
+
+        let line =
+            lines[i].trim();
+
+        if (!line) {
+            i++;
+            continue;
+        }
 
 
-    for (let i = 0; i < lines.length; i++) {
+        /* repeat forever */
 
-        const line = lines[i];
+        if (
+            line === "repeat forever {" ||
+            line === "repeat forever{"
+        ) {
+
+            let depth = 1;
+            let block = [];
+
+            i++;
+
+            while (
+                i < lines.length &&
+                depth > 0
+            ) {
+
+                const current =
+                    lines[i].trim();
+
+                if (
+                    current.endsWith("{")
+                ) {
+                    depth++;
+                }
+
+                if (
+                    current === "}"
+                ) {
+                    depth--;
+
+                    if (depth === 0) {
+                        break;
+                    }
+                }
+
+                if (depth > 0) {
+                    block.push(
+                        lines[i]
+                    );
+                }
+
+                i++;
+            }
+
+            executeForever(
+                block.join("\n"),
+                localElements
+            );
+
+            i++;
+
+            continue;
+        }
 
 
-        // =================================
-        // FUNCTION
-        // =================================
+        await executeLine(
+            line,
+            localElements
+        );
+
+        i++;
+    }
+}
+
+
+/* =========================
+   WEBLY PARSER
+========================= */
+
+async function runWebly(code) {
+
+    const lines =
+        code.split("\n");
+
+    let i = 0;
+
+    while (i < lines.length) {
+
+        let line =
+            lines[i].trim();
+
+        if (!line) {
+            i++;
+            continue;
+        }
+
+
+        /* FUNCTION */
 
         const functionMatch =
             line.match(
-                /^function\s+([A-Za-z_][A-Za-z0-9_]*)\((.*?)\)\s*\{$/
+                /^function\s+(\w+)\s*\((.*?)\)\s*\{$/
             );
 
         if (functionMatch) {
@@ -602,104 +616,102 @@ function parseWebly(source) {
             const name =
                 functionMatch[1];
 
-            const parameters =
-                functionMatch[2].trim()
-                    ? functionMatch[2]
-                        .split(",")
-                        .map(x => x.trim())
-                    : [];
+            const params =
+                functionMatch[2]
+                    .split(",")
+                    .map(x => x.trim())
+                    .filter(Boolean);
 
-            const result =
-                collectBlock(
-                    lines,
-                    i
-                );
+            let depth = 1;
+            let body = [];
 
-            defineFunction(
-                name,
-                parameters,
-                result.body
-            );
+            i++;
 
-            i = result.nextIndex - 1;
+            while (
+                i < lines.length &&
+                depth > 0
+            ) {
+
+                const current =
+                    lines[i].trim();
+
+                if (
+                    current.endsWith("{")
+                ) {
+                    depth++;
+                }
+
+                if (
+                    current === "}"
+                ) {
+                    depth--;
+
+                    if (depth === 0) {
+                        break;
+                    }
+                }
+
+                if (depth > 0) {
+                    body.push(
+                        lines[i]
+                    );
+                }
+
+                i++;
+            }
+
+            functions[name] = {
+                params,
+                body: body.join("\n")
+            };
+
+            i++;
 
             continue;
         }
 
 
-        // =================================
-        // CREATE
-        // =================================
+        /* FUNCTION CALL */
 
-        const createMatch =
+        const callMatch =
             line.match(
-                /^([A-Za-z_][A-Za-z0-9_]*)\.create\("([^"]+)"\)$/
+                /^(\w+)\s*\((.*?)\)$/
             );
 
-        if (createMatch) {
-
-            const type =
-                createMatch[1];
+        if (callMatch) {
 
             const name =
-                createMatch[2];
+                callMatch[1];
 
-            createElement(
-                type,
-                name
-            );
+            const args =
+                callMatch[2]
+                    .split(",")
+                    .map(x => x.trim())
+                    .filter(Boolean);
 
-            continue;
-        }
-
-
-        // =================================
-        // EVENT
-        // =================================
-
-        const eventMatch =
-            line.match(
-                /^([A-Za-z_][A-Za-z0-9_]*)\.([A-Za-z_][A-Za-z0-9_]*)\s*\{$/
-            );
-
-        if (eventMatch) {
-
-            const name =
-                eventMatch[1];
-
-            const event =
-                eventMatch[2];
-
-            const result =
-                collectBlock(
-                    lines,
-                    i
-                );
-
-            attachEvent(
+            await callFunction(
                 name,
-                event,
-                result.body
+                args
             );
 
-            i = result.nextIndex - 1;
+            i++;
 
             continue;
         }
 
 
-        // =================================
-        // NORMAL CODE
-        // =================================
+        /* NORMAL LINE */
 
-        executeLine(line);
+        await executeLine(line);
+
+        i++;
     }
 }
 
 
-// ========================================
-// LOAD WEBLY SOURCE
-// ========================================
+/* =========================
+   LOAD main.webly
+========================= */
 
 async function loadWebly() {
 
@@ -708,21 +720,15 @@ async function loadWebly() {
         const response =
             await fetch("main.webly");
 
-        if (!response.ok) {
-            throw new Error(
-                "Could not load main.webly"
-            );
-        }
-
-        const source =
+        const code =
             await response.text();
 
-        parseWebly(source);
+        await runWebly(code);
 
     } catch (error) {
 
         console.error(
-            "Webly error:",
+            "Webly runtime error:",
             error
         );
     }
@@ -730,6 +736,7 @@ async function loadWebly() {
 
 
 loadWebly();
+
 </script>
 
 </body>
