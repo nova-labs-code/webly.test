@@ -17,7 +17,7 @@
 
 async function start() {
 
-    const syntax = await fetch("syntax.json")
+    const syntax = await fetch("syntax.json?v=2")
         .then(response => response.json());
 
     const source = await fetch("main.webly")
