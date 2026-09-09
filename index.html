@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
     <title>Webly Runtime</title>
 </head>
 
@@ -12,6 +11,21 @@
 <script>
 const elements = {};
 const functions = {};
+
+
+/* =========================
+   PAGE
+========================= */
+
+const page = {
+    set background(value) {
+        document.body.style.background = value;
+    },
+
+    get background() {
+        return document.body.style.background;
+    }
+};
 
 
 /* =========================
@@ -61,7 +75,6 @@ function createElement(type, name) {
 ========================= */
 
 function setProperty(element, property, value) {
-
     if (!element) return;
 
     switch (property) {
@@ -189,7 +202,6 @@ function setProperty(element, property, value) {
 ========================= */
 
 function runAction(element, action) {
-
     if (!element) return;
 
     switch (action) {
@@ -268,6 +280,7 @@ async function executeLine(line, localElements = {}) {
 
     if (!line) return;
 
+
     /* wait(seconds) */
 
     const waitMatch = line.match(
@@ -284,6 +297,27 @@ async function executeLine(line, localElements = {}) {
         );
 
         await wait(seconds);
+
+        return;
+    }
+
+
+    /* page.background = value */
+
+    const pageMatch = line.match(
+        /^page\.(background)\s*=\s*(.+)$/
+    );
+
+    if (pageMatch) {
+
+        const property = pageMatch[1];
+
+        const value = parseValue(
+            pageMatch[2],
+            localElements
+        );
+
+        page[property] = value;
 
         return;
     }
@@ -327,40 +361,6 @@ async function executeLine(line, localElements = {}) {
     }
 
 
-    /* element.property = value */
-
-    const assignmentMatch = line.match(
-        /^(\w+)\.(\w+)\s*=\s*(.+)$/
-    );
-
-    if (assignmentMatch) {
-
-        const name = assignmentMatch[1];
-        const property = assignmentMatch[2];
-        const rawValue = assignmentMatch[3];
-
-        const element =
-            localElements[name] ||
-            elements[name];
-
-        if (!element) return;
-
-        const value =
-            parseValue(
-                rawValue,
-                localElements
-            );
-
-        setProperty(
-            element,
-            property,
-            value
-        );
-
-        return;
-    }
-
-
     /* element.property += value */
 
     const addMatch = line.match(
@@ -371,19 +371,17 @@ async function executeLine(line, localElements = {}) {
 
         const name = addMatch[1];
         const property = addMatch[2];
-        const rawValue = addMatch[3];
+
+        const value = parseValue(
+            addMatch[3],
+            localElements
+        );
 
         const element =
             localElements[name] ||
             elements[name];
 
         if (!element) return;
-
-        const value =
-            parseValue(
-                rawValue,
-                localElements
-            );
 
         if (property === "text") {
 
@@ -392,9 +390,7 @@ async function executeLine(line, localElements = {}) {
         } else {
 
             const current =
-                Number(
-                    element[property] || 0
-                );
+                Number(element[property] || 0);
 
             setProperty(
                 element,
@@ -405,11 +401,43 @@ async function executeLine(line, localElements = {}) {
 
         return;
     }
+
+
+    /* element.property = value */
+
+    const assignmentMatch = line.match(
+        /^(\w+)\.(\w+)\s*=\s*(.+)$/
+    );
+
+    if (assignmentMatch) {
+
+        const name = assignmentMatch[1];
+        const property = assignmentMatch[2];
+
+        const element =
+            localElements[name] ||
+            elements[name];
+
+        if (!element) return;
+
+        const value = parseValue(
+            assignmentMatch[3],
+            localElements
+        );
+
+        setProperty(
+            element,
+            property,
+            value
+        );
+
+        return;
+    }
 }
 
 
 /* =========================
-   FUNCTION BODY EXECUTION
+   EXECUTE BLOCK
 ========================= */
 
 async function executeBlock(
@@ -453,13 +481,96 @@ async function executeForever(
 
 
 /* =========================
+   FUNCTION BODY
+========================= */
+
+async function executeFunctionBody(
+    body,
+    localElements
+) {
+
+    const lines = body.split("\n");
+
+    let i = 0;
+
+    while (i < lines.length) {
+
+        const line = lines[i].trim();
+
+        if (!line) {
+            i++;
+            continue;
+        }
+
+
+        /* repeat forever */
+
+        if (
+            line === "repeat forever {" ||
+            line === "repeat forever{"
+        ) {
+
+            let depth = 1;
+            const block = [];
+
+            i++;
+
+            while (
+                i < lines.length &&
+                depth > 0
+            ) {
+
+                const current =
+                    lines[i].trim();
+
+                if (
+                    current.endsWith("{")
+                ) {
+                    depth++;
+                }
+
+                if (current === "}") {
+
+                    depth--;
+
+                    if (depth === 0) {
+                        break;
+                    }
+                }
+
+                if (depth > 0) {
+                    block.push(lines[i]);
+                }
+
+                i++;
+            }
+
+            executeForever(
+                block.join("\n"),
+                localElements
+            );
+
+            i++;
+
+            continue;
+        }
+
+
+        await executeLine(
+            line,
+            localElements
+        );
+
+        i++;
+    }
+}
+
+
+/* =========================
    FUNCTION CALL
 ========================= */
 
-async function callFunction(
-    name,
-    args
-) {
+async function callFunction(name, args) {
 
     const fn = functions[name];
 
@@ -492,111 +603,18 @@ async function callFunction(
 
 
 /* =========================
-   FUNCTION BODY PARSER
-========================= */
-
-async function executeFunctionBody(
-    body,
-    localElements
-) {
-
-    const lines =
-        body.split("\n");
-
-    let i = 0;
-
-    while (i < lines.length) {
-
-        let line =
-            lines[i].trim();
-
-        if (!line) {
-            i++;
-            continue;
-        }
-
-
-        /* repeat forever */
-
-        if (
-            line === "repeat forever {" ||
-            line === "repeat forever{"
-        ) {
-
-            let depth = 1;
-            let block = [];
-
-            i++;
-
-            while (
-                i < lines.length &&
-                depth > 0
-            ) {
-
-                const current =
-                    lines[i].trim();
-
-                if (
-                    current.endsWith("{")
-                ) {
-                    depth++;
-                }
-
-                if (
-                    current === "}"
-                ) {
-                    depth--;
-
-                    if (depth === 0) {
-                        break;
-                    }
-                }
-
-                if (depth > 0) {
-                    block.push(
-                        lines[i]
-                    );
-                }
-
-                i++;
-            }
-
-            executeForever(
-                block.join("\n"),
-                localElements
-            );
-
-            i++;
-
-            continue;
-        }
-
-
-        await executeLine(
-            line,
-            localElements
-        );
-
-        i++;
-    }
-}
-
-
-/* =========================
    WEBLY PARSER
 ========================= */
 
 async function runWebly(code) {
 
-    const lines =
-        code.split("\n");
+    const lines = code.split("\n");
 
     let i = 0;
 
     while (i < lines.length) {
 
-        let line =
-            lines[i].trim();
+        const line = lines[i].trim();
 
         if (!line) {
             i++;
@@ -623,7 +641,7 @@ async function runWebly(code) {
                     .filter(Boolean);
 
             let depth = 1;
-            let body = [];
+            const body = [];
 
             i++;
 
@@ -641,9 +659,8 @@ async function runWebly(code) {
                     depth++;
                 }
 
-                if (
-                    current === "}"
-                ) {
+                if (current === "}") {
+
                     depth--;
 
                     if (depth === 0) {
@@ -652,9 +669,7 @@ async function runWebly(code) {
                 }
 
                 if (depth > 0) {
-                    body.push(
-                        lines[i]
-                    );
+                    body.push(lines[i]);
                 }
 
                 i++;
@@ -710,7 +725,7 @@ async function runWebly(code) {
 
 
 /* =========================
-   LOAD main.webly
+   LOAD MAIN.WEBLY
 ========================= */
 
 async function loadWebly() {
@@ -719,6 +734,12 @@ async function loadWebly() {
 
         const response =
             await fetch("main.webly");
+
+        if (!response.ok) {
+            throw new Error(
+                "Could not load main.webly"
+            );
+        }
 
         const code =
             await response.text();
@@ -736,7 +757,6 @@ async function loadWebly() {
 
 
 loadWebly();
-
 </script>
 
 </body>
